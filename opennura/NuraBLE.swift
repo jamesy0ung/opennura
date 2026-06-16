@@ -337,6 +337,16 @@ private func gaiaStatusName(_ b: Int) -> String {
     ][b] ?? "Unknown(\(b))"
 }
 
+private func gaiaEventDescription(_ payload: [UInt8]) -> String? {
+    guard payload.count >= 3 else { return nil }
+    switch (payload[1], payload[2]) {
+    case (0x05, 0x04): return "play/pause"
+    case (0x06, 0x02): return "social mode ON"
+    case (0x06, 0x00): return "social mode OFF"
+    default: return nil
+    }
+}
+
 enum ConnectionPhase: Equatable {
     case idle, scanning, connecting, discovering, handshaking, ready
     case failed(String)
@@ -395,6 +405,7 @@ private let cmdSetAncState: UInt16 = 0x0048
 private let cmdGetAncState: UInt16 = 0x0049
 private let cmdSetKickitParams: UInt16 = 0x004C
 private let cmdGetKickitParams: UInt16 = 0x004D
+private let cmdEventNotification: UInt16 = 0x800e
 
 private let defaultNuraKey: [UInt8] = [
     0xe3, 0x15, 0xf1, 0x2f, 0x69, 0xb9, 0x3c, 0x8c,
@@ -438,7 +449,7 @@ func decodeImmersionLevel(from pt: [UInt8]) -> Int? {
 
 func decodeSocialMode(from pt: [UInt8]) -> Bool? {
     guard pt.count >= 3 else { return nil }
-    return pt[2] == 0x00
+    return pt[2] != 0x00
 }
 
 // MARK: - NuraBLEManager (ObservableObject)
@@ -532,7 +543,7 @@ final class NuraBLEManager: NSObject, ObservableObject {
 
     func setSocialMode(_ enabled: Bool) {
         guard phase.isReady else { return }
-        let byte: UInt8 = enabled ? 0x00 : 0x01
+        let byte: UInt8 = enabled ? 0x01 : 0x00
         addLog("-> SetAncState social \(enabled ? "ON" : "OFF")")
         sendEncrypted(opcode: cmdSetAncState, params: [0x00, 0x00, byte]) {
             [weak self] result in
@@ -1109,14 +1120,15 @@ extension NuraBLEManager: CBPeripheralDelegate {
             let cmd = (UInt16(data[2]) << 8) | UInt16(data[3])
             let payload = [UInt8](data[4...])
             guard vendor == gaiaVendor else { return }
-            addLog(
-                String(
-                    format: "<- GAIA cmd=0x%04x (%d bytes) payload=%@",
-                    cmd,
-                    payload.count,
-                    hexStr(Data(payload))
-                )
+            var logLine = String(
+                format: "<- GAIA cmd=0x%04x (%d bytes) payload=%@",
+                cmd, payload.count, hexStr(Data(payload))
             )
+            if cmd == cmdEventNotification, payload.count >= 3 {
+                if let desc = gaiaEventDescription(payload) { logLine += "  [\(desc)]" }
+                if payload[1] == 0x06 { socialMode = payload[2] != 0x00 }
+            }
+            addLog(logLine)
             if cmd == pendingAck {
                 if payload.count < pendingMinLen {
                     addLog(
