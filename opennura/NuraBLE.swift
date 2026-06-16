@@ -412,7 +412,7 @@ private let defaultNuraKey: [UInt8] = [
     0x14, 0x51, 0x86, 0x3c, 0xd1, 0x83, 0x1e, 0x97,
 ]
 
-private let nuraphoneBdAddrSuffix: [UInt8] = [
+nonisolated(unsafe) private let nuraphoneBdAddrSuffix: [UInt8] = [
     0x74, 0x1a, 0xe0, 0x21, 0x07, 0x86,
 ]
 

@@ -238,7 +238,7 @@ struct LogView: View {
                 }
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                 .frame(minHeight: 180, maxHeight: 320)
-                .onChange(of: logs.count) { _, _ in
+                .onChange(of: logs.count) { _ in
                     if let last = logs.indices.last {
                         withAnimation { proxy.scrollTo(last, anchor: .bottom) }
                     }
