@@ -1,263 +1,369 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var ble = NuraBLEManager()
+    @ObservedObject var auth: NuraAuthManager
+    #if os(macOS)
+    @StateObject private var device = NuraDeviceManager(transportType: .classic)
+    #else
+    @StateObject private var device = NuraDeviceManager(transportType: .ble)
+    #endif
+
+    var body: some View {
+        TabView {
+            DeviceTab(device: device)
+                .tabItem {
+                    Label("Device", systemImage: "headphones")
+                }
+            SettingsTab(device: device, auth: auth)
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape")
+                }
+        }
+        #if os(macOS)
+        .frame(minWidth: 480, minHeight: 500)
+        #endif
+    }
+}
+
+// MARK: - Device Tab
+
+struct DeviceTab: View {
+    @ObservedObject var device: NuraDeviceManager
     @State private var showLogs = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                headerSection
-                connectSection
-                Divider()
-                immersionSection
-                Divider()
-                socialSection
-                Divider()
-                soundSection
-                Divider()
+        NavigationStack {
+            List {
+                connectionSection
+                if device.phase.isReady {
+                    batterySection
+                    controlsSection
+                    profilesSection
+                    deviceInfoSection
+                }
                 logsSection
             }
-            .padding()
-        }
-        #if os(macOS)
-            .frame(minWidth: 520, minHeight: 440)
-        #endif
-    }
-
-    // MARK: - Sections
-
-    private var headerSection: some View {
-        HStack(alignment: .center) {
-            Text("OpenNura").font(.largeTitle.bold())
-            Spacer()
-            StatusBadge(phase: ble.phase)
+            .navigationTitle("OpenNura")
+            #if os(iOS)
+            .listStyle(.insetGrouped)
+            #endif
         }
     }
 
-    private var connectSection: some View {
-        HStack(spacing: 12) {
-            Button("Connect") { ble.connect() }
-                .buttonStyle(.borderedProminent)
-                .disabled(!ble.phase.isIdle)
-            Button("Disconnect") { ble.disconnect() }
-                .buttonStyle(.bordered)
-                .disabled(ble.phase.isIdle)
-        }
-    }
+    // MARK: - Connection
 
-    private var immersionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private var connectionSection: some View {
+        Section {
             HStack {
-                Image(systemName: "waveform").foregroundStyle(.tint)
-                Text("Immersion").font(.headline)
-                Text("(current: \(ble.immersionLevel))")
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
-            ImmersionButtons(current: ble.immersionLevel) {
-                ble.setImmersion($0)
-            }
-        }
-        .disabled(!ble.phase.isReady)
-    }
-
-    private var socialSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "ear").foregroundStyle(.tint)
-                Text("Social Mode").font(.headline)
-            }
-            HStack(spacing: 12) {
-                socialButton(
-                    label: "Social ON",
-                    active: ble.socialMode,
-                    tint: .green
-                ) {
-                    ble.setSocialMode(true)
-                }
-                socialButton(
-                    label: "Social OFF",
-                    active: !ble.socialMode,
-                    tint: .blue
-                ) {
-                    ble.setSocialMode(false)
-                }
-            }
-        }
-        .disabled(!ble.phase.isReady)
-    }
-
-    @ViewBuilder
-    private func socialButton(
-        label: String,
-        active: Bool,
-        tint: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        if active {
-            Button(label, action: action).buttonStyle(.borderedProminent).tint(
-                tint
-            )
-        } else {
-            Button(label, action: action).buttonStyle(.bordered).tint(tint)
-        }
-    }
-
-    private var soundSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "music.note").foregroundStyle(.tint)
-                Text("Sound Mode").font(.headline)
-            }
-            HStack(spacing: 12) {
-                ForEach(SoundMode.allCases) { mode in
-                    soundModeButton(mode)
-                }
-            }
-        }
-        .disabled(!ble.phase.isReady)
-    }
-
-    @ViewBuilder
-    private func soundModeButton(_ mode: SoundMode) -> some View {
-        if ble.soundMode == mode {
-            Button(mode.rawValue) { ble.setSoundMode(mode) }.buttonStyle(
-                .borderedProminent
-            )
-        } else {
-            Button(mode.rawValue) { ble.setSoundMode(mode) }.buttonStyle(
-                .bordered
-            )
-        }
-    }
-
-    private var logsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: $showLogs) {
-                HStack {
-                    Image(systemName: "text.alignleft")
-                    Text("Logs")
-                }
-            }
-            .toggleStyle(.button)
-            .buttonStyle(.bordered)
-
-            if showLogs {
-                LogView(logs: ble.logs)
-            }
-        }
-    }
-}
-
-// MARK: - Status badge
-
-struct StatusBadge: View {
-    let phase: ConnectionPhase
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(dotColor).frame(width: 10, height: 10)
-            Text(phase.label).font(.caption).foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 10).padding(.vertical, 4)
-        .background(.quaternary, in: Capsule())
-    }
-
-    private var dotColor: Color {
-        switch phase {
-        case .ready: return .green
-        case .failed: return .red
-        case .idle: return .gray
-        default: return .orange
-        }
-    }
-}
-
-// MARK: - Immersion level buttons (-2...4)
-
-struct ImmersionButtons: View {
-    let current: Int
-    let onSelect: (Int) -> Void
-    private let levels = [-2, -1, 0, 1, 2, 3, 4]
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(levels, id: \.self) { level in
-                levelButton(level)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func levelButton(_ level: Int) -> some View {
-        let title = level >= 0 ? "+\(level)" : "\(level)"
-        let tint = levelTint(level)
-        if level == current {
-            Button(title) { onSelect(level) }.buttonStyle(.borderedProminent)
-                .tint(tint)
-        } else {
-            Button(title) { onSelect(level) }.buttonStyle(.bordered).tint(tint)
-        }
-    }
-
-    private func levelTint(_ level: Int) -> Color {
-        switch level {
-        case 4, 3: return .purple
-        case 2, 1: return .blue
-        case 0: return .gray
-        default: return .orange
-        }
-    }
-}
-
-// MARK: - Log view
-
-struct LogView: View {
-    let logs: [String]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+                StatusBadge(phase: device.phase)
                 Spacer()
-                Button("Copy All") { copyAll() }
-                    .font(.caption)
-                    .buttonStyle(.bordered)
+                if device.phase.isIdle {
+                    Button("Connect") { device.connect() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                } else {
+                    Button("Disconnect", role: .destructive) { device.disconnect() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
             }
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(logs.indices, id: \.self) { i in
-                            Text(logs[i])
-                                .font(.system(size: 11, design: .monospaced))
+        }
+    }
+
+    // MARK: - Battery
+
+    @ViewBuilder
+    private var batterySection: some View {
+        if let battery = device.state.battery {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label {
+                            Text("Battery")
+                        } icon: {
+                            Image(systemName: batteryIcon(battery))
+                                .foregroundStyle(batteryColor(battery))
+                        }
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Text("\(battery.batteryPercentage)%")
+                                .font(.subheadline.weight(.medium))
                                 .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                                .id(i)
+                            if battery.isCharging {
+                                Image(systemName: "bolt.fill")
+                                    .foregroundStyle(.green)
+                                    .font(.caption)
+                            }
                         }
                     }
-                    .padding(8)
+                    ProgressView(value: Double(battery.batteryPercentage), total: 100)
+                        .tint(batteryColor(battery))
                 }
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-                .frame(minHeight: 180, maxHeight: 320)
-                .onChange(of: logs.count) { _ in
-                    if let last = logs.indices.last {
-                        withAnimation { proxy.scrollTo(last, anchor: .bottom) }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    // MARK: - Controls
+
+    private var controlsSection: some View {
+        Section("Controls") {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Immersion", systemImage: "waveform.path")
+                ImmersionSlider(current: device.state.immersionLevel) {
+                    device.setImmersion($0)
+                }
+            }
+            .padding(.vertical, 4)
+
+            Toggle(isOn: Binding(
+                get: { device.state.ancEnabled },
+                set: { device.setAncEnabled($0) }
+            )) {
+                Label("Active Noise Cancellation", systemImage: "ear.trianglebadge.exclamationmark")
+            }
+
+            Toggle(isOn: Binding(
+                get: { device.state.passthroughEnabled },
+                set: { device.setSocialMode($0) }
+            )) {
+                Label("Social Mode", systemImage: "ear")
+            }
+
+            HStack {
+                Label("Sound", systemImage: "music.note")
+                Spacer()
+                Picker("", selection: Binding(
+                    get: { device.state.personalisationMode },
+                    set: { device.setSoundMode($0) }
+                )) {
+                    ForEach(NuraPersonalisationMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
                     }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 200)
+            }
+
+            if let spatial = device.state.spatialEnabled {
+                Toggle(isOn: Binding(
+                    get: { spatial },
+                    set: { device.setSpatialEnabled($0) }
+                )) {
+                    Label("Spatial Audio", systemImage: "spatial.audio")
                 }
             }
         }
     }
 
-    private func copyAll() {
-        let text = logs.joined(separator: "\n")
-        #if os(macOS)
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
-        #else
-            UIPasteboard.general.string = text
-        #endif
+    // MARK: - Profiles
+
+    @ViewBuilder
+    private var profilesSection: some View {
+        if !device.state.profileNames.isEmpty {
+            Section("Profiles") {
+                profileRow(id: 0)
+                profileRow(id: 1)
+                profileRow(id: 2)
+            }
+        }
+    }
+
+    private func profileRow(id: Int) -> some View {
+        let name = device.state.profileNames[id] ?? "Profile \(id + 1)"
+        let isCurrent = device.state.profileId == id
+        return Button {
+            device.selectProfile(id)
+        } label: {
+            HStack {
+                Text(name)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if isCurrent {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(Color.accentColor)
+                        .fontWeight(.semibold)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Device Info
+
+    @ViewBuilder
+    private var deviceInfoSection: some View {
+        if let info = device.state.deviceInfo {
+            Section("Device Info") {
+                LabeledContent("Serial") {
+                    Text("\(info.serialNumber)")
+                        .font(.footnote.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent("Firmware") {
+                    Text("\(info.firmwareVersion)")
+                        .font(.footnote.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Logs
+
+    private var logsSection: some View {
+        Section {
+            DisclosureGroup("Logs", isExpanded: $showLogs) {
+                LogView(logs: device.logs)
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func batteryIcon(_ battery: NuraBatteryStatus) -> String {
+        if battery.isCharging { return "battery.100.bolt" }
+        switch battery.batteryPercentage {
+        case 75...100: return "battery.100"
+        case 50..<75: return "battery.75"
+        case 25..<50: return "battery.50"
+        case 1..<25: return "battery.25"
+        default: return "battery.0"
+        }
+    }
+
+    private func batteryColor(_ battery: NuraBatteryStatus) -> Color {
+        if battery.isCharging { return .green }
+        switch battery.batteryPercentage {
+        case 21...100: return .green
+        case 11...20: return .orange
+        default: return .red
+        }
+    }
+}
+
+// MARK: - Settings Tab
+
+struct SettingsTab: View {
+    @ObservedObject var device: NuraDeviceManager
+    @ObservedObject var auth: NuraAuthManager
+    @State private var showLogoutConfirm = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                #if os(macOS)
+                transportSection
+                #endif
+                accountSection
+            }
+            .navigationTitle("Settings")
+            #if os(iOS)
+            .listStyle(.insetGrouped)
+            #endif
+        }
+    }
+
+    #if os(macOS)
+    private var transportSection: some View {
+        Section("Bluetooth Transport") {
+            Picker("Connection type", selection: Binding(
+                get: { device.transportType },
+                set: { device.switchTransport(to: $0) }
+            )) {
+                ForEach(TransportType.allCases) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+            .disabled(!device.phase.isIdle)
+
+            Text("Classic Bluetooth uses RFCOMM (faster, macOS only). Bluetooth LE works on all Apple devices.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+    #endif
+
+    private var accountSection: some View {
+        Section("Account") {
+            switch auth.authState {
+            case .loggedOut:
+                AuthLoginView(auth: auth)
+            case .codeSent:
+                AuthCodeView(auth: auth)
+            case .loggedIn(let email):
+                LabeledContent("Signed in") {
+                    Text(email)
+                        .foregroundStyle(.secondary)
+                }
+                Button("Sign Out", role: .destructive) {
+                    showLogoutConfirm = true
+                }
+                .confirmationDialog(
+                    "Are you sure you want to sign out?",
+                    isPresented: $showLogoutConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Sign Out", role: .destructive) { auth.logout() }
+                    Button("Cancel", role: .cancel) {}
+                }
+            case .error(let message):
+                Label(message, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                    .font(.caption)
+                Button("Try Again") { auth.authState = .loggedOut }
+            }
+        }
+    }
+}
+
+// MARK: - Auth sub-views
+
+private struct AuthLoginView: View {
+    @ObservedObject var auth: NuraAuthManager
+    @State private var email = ""
+
+    var body: some View {
+        TextField("Email address", text: $email)
+            #if !os(macOS)
+            .keyboardType(.emailAddress)
+            .textContentType(.emailAddress)
+            .autocapitalization(.none)
+            #endif
+        Button("Send Login Code") {
+            Task { await auth.requestEmailCode(email: email) }
+        }
+        .disabled(email.isEmpty || auth.isLoading)
+    }
+}
+
+private struct AuthCodeView: View {
+    @ObservedObject var auth: NuraAuthManager
+    @State private var code = ""
+
+    var body: some View {
+        if let email = auth.userEmail {
+            Text("Code sent to \(email)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        TextField("Verification code", text: $code)
+            #if !os(macOS)
+            .keyboardType(.numberPad)
+            #endif
+        HStack {
+            Button("Verify") {
+                Task { await auth.verifyCode(code) }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(code.isEmpty || auth.isLoading)
+            Button("Cancel") { auth.authState = .loggedOut }
+                .buttonStyle(.bordered)
+        }
     }
 }
 
 #Preview {
-    ContentView()
+    ContentView(auth: NuraAuthManager(configStore: NuraConfigStore()))
 }
