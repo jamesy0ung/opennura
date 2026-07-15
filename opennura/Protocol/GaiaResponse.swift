@@ -18,31 +18,4 @@ struct GaiaResponse {
         let payload = bytes.count > 4 ? Array(bytes[4...]) : []
         return GaiaResponse(vendorId: vendor, rawCommandId: cmd, payload: payload)
     }
-
-    static func fromRFCOMM(_ bytes: [UInt8]) throws -> GaiaResponse {
-        guard bytes.count >= 8 else {
-            throw NuraError.malformed("RFCOMM frame too short")
-        }
-        guard bytes[0] == 0xFF else {
-            throw NuraError.malformed("invalid SOF")
-        }
-
-        let flags = bytes[2]
-        let usesLengthExtension = (flags & 0x02) != 0
-        let headerLength = usesLengthExtension ? 9 : 8
-
-        guard bytes.count >= headerLength else {
-            throw NuraError.malformed("frame too short for header")
-        }
-
-        let vendorOffset = usesLengthExtension ? 5 : 4
-        let commandOffset = usesLengthExtension ? 7 : 6
-        let payloadOffset = headerLength
-
-        let vendor = (UInt16(bytes[vendorOffset]) << 8) | UInt16(bytes[vendorOffset + 1])
-        let rawCmd = (UInt16(bytes[commandOffset]) << 8) | UInt16(bytes[commandOffset + 1])
-        let payload = bytes.count > payloadOffset ? Array(bytes[payloadOffset...]) : []
-
-        return GaiaResponse(vendorId: vendor, rawCommandId: rawCmd, payload: payload)
-    }
 }

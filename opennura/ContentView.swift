@@ -2,11 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var auth: NuraAuthManager
-    #if os(macOS)
-    @StateObject private var device = NuraDeviceManager(transportType: .classic)
-    #else
-    @StateObject private var device = NuraDeviceManager(transportType: .ble)
-    #endif
+    @StateObject private var device = NuraDeviceManager()
 
     var body: some View {
         TabView {
@@ -253,9 +249,6 @@ struct SettingsTab: View {
     var body: some View {
         NavigationStack {
             List {
-                #if os(macOS)
-                transportSection
-                #endif
                 accountSection
             }
             .navigationTitle("Settings")
@@ -264,26 +257,6 @@ struct SettingsTab: View {
             #endif
         }
     }
-
-    #if os(macOS)
-    private var transportSection: some View {
-        Section("Bluetooth Transport") {
-            Picker("Connection type", selection: Binding(
-                get: { device.transportType },
-                set: { device.switchTransport(to: $0) }
-            )) {
-                ForEach(TransportType.allCases) { type in
-                    Text(type.rawValue).tag(type)
-                }
-            }
-            .disabled(!device.phase.isIdle)
-
-            Text("Classic Bluetooth uses RFCOMM (faster, macOS only). Bluetooth LE works on all Apple devices.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-    #endif
 
     private var accountSection: some View {
         Section("Account") {

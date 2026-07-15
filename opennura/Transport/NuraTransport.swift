@@ -1,11 +1,5 @@
 import Foundation
 
-enum TransportType: String, CaseIterable, Identifiable {
-    case ble = "Bluetooth LE"
-    case classic = "Classic Bluetooth"
-    var id: String { rawValue }
-}
-
 protocol NuraTransportDelegate: AnyObject {
     func transportDidUpdatePhase(_ phase: ConnectionPhase)
     func transportDidReceiveIndication(_ response: GaiaResponse)

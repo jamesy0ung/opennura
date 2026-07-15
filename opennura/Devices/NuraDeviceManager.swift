@@ -6,7 +6,6 @@ final class NuraDeviceManager: NSObject, ObservableObject {
 
     @Published var phase: ConnectionPhase = .idle
     @Published var logs: [String] = []
-    @Published var transportType: TransportType
 
     let state = NuraDeviceState()
 
@@ -15,35 +14,10 @@ final class NuraDeviceManager: NSObject, ObservableObject {
     private var session: NuraSession?
     private var gaiaCommandBusy = false
 
-    init(transportType: TransportType = .ble) {
-        self.transportType = transportType
-        #if os(macOS)
-        if transportType == .classic {
-            self.transport = ClassicBTTransport()
-        } else {
-            self.transport = BLETransport()
-        }
-        #else
+    override init() {
         self.transport = BLETransport()
-        #endif
         super.init()
         self.transport.delegate = self
-    }
-
-    func switchTransport(to type: TransportType) {
-        guard type != transportType else { return }
-        disconnect()
-        transportType = type
-        #if os(macOS)
-        if type == .classic {
-            transport = ClassicBTTransport()
-        } else {
-            transport = BLETransport()
-        }
-        #else
-        transport = BLETransport()
-        #endif
-        transport.delegate = self
     }
 
     // MARK: - Connection
