@@ -1,9 +1,6 @@
 import Foundation
 
 struct NuraConfig: Codable {
-    var apiBase: String = "https://api-p3.nuraphone.com/"
-    var uuid: String = UUID().uuidString
-    var auth: NuraAuthConfig = NuraAuthConfig()
     var devices: [NuraDeviceConfigEntry] = []
 
     func deviceBySerial(_ serial: String) -> NuraDeviceConfigEntry? {
@@ -19,26 +16,8 @@ struct NuraConfig: Codable {
     }
 }
 
-struct NuraAuthConfig: Codable {
-    var userEmail: String?
-    var authUid: String?
-    var accessToken: String?
-    var clientKey: String?
-    var tokenType: String = "Bearer"
-    var tokenExpiryUnix: Int64?
-
-    var hasAuthenticatedSession: Bool {
-        guard let accessToken, !accessToken.isEmpty,
-              let clientKey, !clientKey.isEmpty,
-              let authUid, !authUid.isEmpty
-        else { return false }
-        return true
-    }
-}
-
 struct NuraDeviceConfigEntry: Codable {
     var type: String = "Nuraphone"
-    var deviceAddress: String
     var deviceSerial: String
     var friendlyName: String = ""
     var firmwareVersion: Int = 0

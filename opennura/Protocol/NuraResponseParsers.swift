@@ -3,10 +3,15 @@ import Foundation
 enum NuraResponseParsers {
 
     static func decodeDeviceInfo(_ payload: [UInt8]) -> NuraDeviceInfo? {
-        guard payload.count == 8 else { return nil }
+        let body: [UInt8]
+        switch payload.count {
+        case 8: body = payload
+        case 9 where payload[0] == 0: body = Array(payload[1...])
+        default: return nil
+        }
         return NuraDeviceInfo(
-            serialNumber: readInt32BE(payload, 0),
-            firmwareVersion: readInt32BE(payload, 4)
+            serialNumber: readInt32BE(body, 0),
+            firmwareVersion: readInt32BE(body, 4)
         )
     }
 

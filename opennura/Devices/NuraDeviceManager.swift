@@ -10,9 +10,10 @@ final class NuraDeviceManager: NSObject, ObservableObject {
     let state = NuraDeviceState()
 
     private var transport: NuraTransport
-    private var nuraKey: [UInt8] = defaultNuraKey
+    private var nuraKey: [UInt8] = []
     private var session: NuraSession?
     private var gaiaCommandBusy = false
+    private let configStore = NuraConfigStore()
 
     override init() {
         self.transport = BLETransport()
@@ -26,6 +27,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         guard phase.isIdle else { return }
         session = nil
         gaiaCommandBusy = false
+        nuraKey = []
         state.reset()
         phase = .scanning
         addLog("Scanning for nuraphone...")
@@ -273,15 +275,31 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             payload: [],
             expectedAck: cmdGetDeviceInfo | gaiaAckBit
         ) { [weak self] result in
-            if case .success(let p) = result {
-                self?.addLog("  device info: \(hexStr(Data(p)))")
-                if let info = NuraResponseParsers.decodeDeviceInfo(p) {
-                    self?.state.deviceInfo = info
-                    self?.addLog("  serial=\(info.serialNumber) fw=\(info.firmwareVersion)")
-                }
+            guard let self else { return }
+            guard case .success(let p) = result, let info = NuraResponseParsers.decodeDeviceInfo(p) else {
+                self.addLog("GetDeviceInfo failed")
+                self.phase = .failed("GetDeviceInfo failed")
+                return
             }
-            self?.runHandshake()
+            self.addLog("  device info: \(hexStr(Data(p)))")
+            self.state.deviceInfo = info
+            self.addLog("  serial=\(info.serialNumber) fw=\(info.firmwareVersion)")
+            guard self.applyConfiguredKey(forSerial: info.serialNumber) else {
+                self.addLog("No key configured for serial \(info.serialNumber) - add it in Devices")
+                self.phase = .failed("Unknown device - add key in Devices")
+                return
+            }
+            self.runHandshake()
         }
+    }
+
+    private func applyConfiguredKey(forSerial serial: Int) -> Bool {
+        guard let entry = configStore.load().deviceBySerial(String(serial)),
+            let keyBytes = entry.getDeviceKeyBytes()
+        else { return false }
+        nuraKey = keyBytes
+        addLog("  using configured key for serial \(serial)")
+        return true
     }
 
     private func runHandshake() {

@@ -61,13 +61,6 @@ let cmdSetButtonConfigV1: UInt16 = 0x00B6
 let cmdGetButtonConfigV1: UInt16 = 0x00B7
 let cmdGetVisualisationData: UInt16 = 0x00B8
 
-// MARK: - Default encryption key
-
-let defaultNuraKey: [UInt8] = [
-    0xe3, 0x15, 0xf1, 0x2f, 0x69, 0xb9, 0x3c, 0x8c,
-    0x14, 0x51, 0x86, 0x3c, 0xd1, 0x83, 0x1e, 0x97,
-]
-
 // MARK: - Nuraphone BD address suffix for BLE matching
 
 nonisolated(unsafe) let nuraphoneBdAddrSuffix: [UInt8] = [

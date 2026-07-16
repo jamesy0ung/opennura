@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var auth: NuraAuthManager
     @StateObject private var device = NuraDeviceManager()
 
     var body: some View {
@@ -10,9 +9,9 @@ struct ContentView: View {
                 .tabItem {
                     Label("Device", systemImage: "headphones")
                 }
-            SettingsTab(device: device, auth: auth)
+            DeviceKeysView()
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape")
+                    Label("Devices", systemImage: "key")
                 }
         }
         #if os(macOS)
@@ -239,104 +238,6 @@ struct DeviceTab: View {
     }
 }
 
-// MARK: - Settings Tab
-
-struct SettingsTab: View {
-    @ObservedObject var device: NuraDeviceManager
-    @ObservedObject var auth: NuraAuthManager
-    @State private var showLogoutConfirm = false
-
-    var body: some View {
-        NavigationStack {
-            List {
-                accountSection
-            }
-            .navigationTitle("Settings")
-            #if os(iOS)
-            .listStyle(.insetGrouped)
-            #endif
-        }
-    }
-
-    private var accountSection: some View {
-        Section("Account") {
-            switch auth.authState {
-            case .loggedOut:
-                AuthLoginView(auth: auth)
-            case .codeSent:
-                AuthCodeView(auth: auth)
-            case .loggedIn(let email):
-                LabeledContent("Signed in") {
-                    Text(email)
-                        .foregroundStyle(.secondary)
-                }
-                Button("Sign Out", role: .destructive) {
-                    showLogoutConfirm = true
-                }
-                .confirmationDialog(
-                    "Are you sure you want to sign out?",
-                    isPresented: $showLogoutConfirm,
-                    titleVisibility: .visible
-                ) {
-                    Button("Sign Out", role: .destructive) { auth.logout() }
-                    Button("Cancel", role: .cancel) {}
-                }
-            case .error(let message):
-                Label(message, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-                    .font(.caption)
-                Button("Try Again") { auth.authState = .loggedOut }
-            }
-        }
-    }
-}
-
-// MARK: - Auth sub-views
-
-private struct AuthLoginView: View {
-    @ObservedObject var auth: NuraAuthManager
-    @State private var email = ""
-
-    var body: some View {
-        TextField("Email address", text: $email)
-            #if !os(macOS)
-            .keyboardType(.emailAddress)
-            .textContentType(.emailAddress)
-            .autocapitalization(.none)
-            #endif
-        Button("Send Login Code") {
-            Task { await auth.requestEmailCode(email: email) }
-        }
-        .disabled(email.isEmpty || auth.isLoading)
-    }
-}
-
-private struct AuthCodeView: View {
-    @ObservedObject var auth: NuraAuthManager
-    @State private var code = ""
-
-    var body: some View {
-        if let email = auth.userEmail {
-            Text("Code sent to \(email)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        TextField("Verification code", text: $code)
-            #if !os(macOS)
-            .keyboardType(.numberPad)
-            #endif
-        HStack {
-            Button("Verify") {
-                Task { await auth.verifyCode(code) }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(code.isEmpty || auth.isLoading)
-            Button("Cancel") { auth.authState = .loggedOut }
-                .buttonStyle(.bordered)
-        }
-    }
-}
-
 #Preview {
-    ContentView(auth: NuraAuthManager(configStore: NuraConfigStore()))
+    ContentView()
 }
