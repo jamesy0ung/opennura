@@ -1,168 +1,125 @@
-# OpenNura (macOS key-recovery fork)
+# OpenNura
 
-Control your Nuraphone from macOS, and recover its device key on the Mac with
-no iOS or Windows device required.
+OpenNura is an unofficial control app for the original over-ear
+Nuraphone. It talks to the headphones directly, without the discontinued Nura
+app, and can recover the device key tied to your Nura account.
 
-> ## ⚠️ Safety and disclaimer
->
-> This is unofficial, experimental software that talks directly to headphone
-> hardware by reverse-engineering an undocumented protocol. It is not affiliated
-> with, endorsed by, or supported by Nura. **Use it entirely at your own risk.**
->
-> - **Hearing safety.** Sending commands to headphones can, in bad states,
->   cause sudden loud or high-pitched sound. The Nuraphone disconnects when it's
->   not being worn, so keep it **on your head but with the in-ear tips out of
->   your ears** while connecting or changing settings, and only seat the tips
->   once things look stable. If you ever hear a loud or unexpected noise, take
->   the tips out immediately and power the headphones down.
-> - **Connecting needs the audio link dropped first.** The Nuraphone serves the
->   wrong Bluetooth channel while it is streaming audio, so the app connects from
->   the paired-but-not-connected state. By default it disconnects the
->   headphones' audio for you when you press Connect (a toggle sits next to the
->   button); turn that off if you would rather disconnect it yourself in
->   Bluetooth settings. Either way you can resume audio once connected, and
->   changing settings while audio plays is fine.
-> - As per the GPLv3, this software comes with **no warranty** of any kind. The
->   authors are not liable for any damage to your hearing or your hardware.
-> - The device controls (immersion, noise modes, buttons, dials) are recovered
->   by reverse engineering and are not all verified across firmware versions.
+- ANC, Social Mode, neutral/personalised sound and immersion controls
+- profile switching, names and profile comparisons
+- touch-button remapping
+- global shortcuts and a menu bar controller
+- device-key recovery
 
-This is a fork of [jamesy0ung/opennura](https://github.com/jamesy0ung/opennura)
-that adds two things which make the app usable end-to-end on a Mac alone:
+Other Nura products are not supported at this time. I do own a NuraLoop and NuraTrue Pro and I will perform testing when I have free time.
 
-- **Classic Bluetooth (RFCOMM/SPP) transport** — the Nuraphone exposes its GAIA
-  control channel over classic Bluetooth, not Bluetooth LE, so on macOS this is
-  what actually reaches the headphones.
-- **Backend key recovery** — sign in with your own Nura account and the app
-  recovers your headphone's long-lived device key straight from Nura's servers,
-  then stores it locally so you can control the device offline afterwards.
+## Caution
 
-## Credits
+This project uses an undocumented, reverse-engineered protocol. It is not made,
+endorsed or supported by Nura.
 
-This is a macOS-focused fork of James Young's
-[opennura](https://github.com/jamesy0ung/opennura), which provides the app
-shell, the GAIA protocol layer, and the crypto.
+Unexpected headphone output is possible when experimenting with hardware
+controls. During initial setup, wear the Nuraphone with the in-ear tips outside
+your ears. If you hear anything unusual, take it off and power it down.
 
-The backend key-recovery flow is a Swift port of the reverse engineering in
-**Callum Carmicheal's [Nura-Windows](https://github.com/CallumCarmicheal/Nura-Windows)**,
-which is licensed under the **Apache License 2.0**. Those portions are included
-here under GPLv3 with attribution retained, as Apache 2.0 requires. Without that
-project's work mapping the provisioning sequence, on-Mac key recovery would not
-exist.
+The controls have not been tested against every firmware version. The developer's nuraphones are on 606. **There is no
+warranty; use the software at your own risk.**
 
-See [ATTRIBUTION.md](ATTRIBUTION.md) for the full provenance and
-[NOTICE](NOTICE) / [LICENSE](LICENSE) / [LICENSE-APACHE](LICENSE-APACHE) for
-licensing.
+## What you need
 
-## Features
+- a Mac with Xcode
+- an original Nuraphone paired
+- an Apple development team for local code signing (a free personal team works)
+- for key recovery, access to the Nura account that owns the headphones
 
-- **Noise control** — Off / ANC / Passthrough (Social), per profile.
-- **Sound mode** — Personalised or Neutral.
-- **Immersion** — the full −2…+4 range, applied to the selected profile.
-- **Profiles** — switch between them, rename them (app-side), and see empty
-  slots. On newer firmware you can also view each profile's hearing "signature"
-  and overlay the profiles to compare them.
-- **Touch buttons** — remap single- and double-tap to the functions the
-  Nuraphone actually supports.
-- **Global hotkeys (macOS)** — system-wide keys for immersion up/down, ANC ↔
-  Passthrough, and profile switching, all configurable in the Shortcuts tab.
-- **Menu bar app (macOS)** — a compact popover for quick tweaks without opening
-  the main window.
-- **Key recovery** — recover and store your headphone's device key on the Mac
-  alone, with no iOS or Windows device.
-
-## What is the "device key"?
-
-Every Nuraphone has a unique 16-byte AES key. All control commands (noise
-cancellation, immersion, profiles, and so on) are encrypted with it, so without
-the key the app can connect but not command the device. The official app
-obtained this key from Nura's servers during setup. This app can do the same on
-macOS, or you can enter a key you already have by hand.
-
-## Requirements
-
-- A Mac running a recent macOS with Xcode installed.
-- An Apple ID for local code signing (a free personal team is fine).
-- Your headphones paired in Bluetooth settings.
-- For key recovery: the Nura account (email) your headphones were registered to,
-  and the Nura backend still being online.
+Key recovery also depends on Nura's servers remaining online. Back up your key
+once you have it.
 
 ## Build
 
-1. Open `opennura.xcodeproj` in Xcode.
-2. Select the `opennura` target → Signing & Capabilities, and choose your team.
-3. Set the run destination to **My Mac** and Run.
-4. Grant Bluetooth permission when prompted.
+1. Open `opennura.xcodeproj`.
+2. Select the `opennura` target.
+3. Under **Signing & Capabilities**, choose your development team.
+4. Select **My Mac or your iOS Device** as the destination and run the app.
+5. Allow Bluetooth access when the device asks.
 
-To build a signed, notarised `.app` you can keep in /Applications (so macOS
-stops re-prompting for Keychain access on each rebuild), see
+For a signed and notarised build that can live in `/Applications`, see
 [docs/BUILD-AND-NOTARIZE.md](docs/BUILD-AND-NOTARIZE.md).
 
-## Recovering your device key
+## Connect
 
-The Nuraphone serves the wrong Bluetooth channel while it is actively connected
-for audio, so recovery is most reliable when the headphones are **paired but not
-connected**. The steps:
+On iOS, OpenNura uses Bluetooth LE to connect to the headphones, on macOS this can cause issues with volume control not being recieved by the nuraphones and touch controls from the nuraphones not working on the Mac. Bluetooth LE does have faster pair time however as we do not need to disconnect the device first to connect to the control channel.
 
-1. In Bluetooth settings, make sure the Nuraphone is paired. Leave "Disconnect
-   audio automatically" on (next to the Connect button) and the app will drop
-   the audio link for you; otherwise disconnect it yourself (leave it paired).
-2. Launch the app, go to the **Devices** tab, and open **Recover key from
-   Nura**.
-3. Sign in with your Nura account email and the code it sends you.
-4. Tap **Recover key from connected nuraphone** and wait (up to a minute). The
-   app talks to both the headphones and Nura's servers and saves the key.
+Connect the Nuraphone to the device normally before pressing **Connect** in
+OpenNura. The app uses the active audio route to distinguish it from old or
+unavailable Nura devices in your Bluetooth pairing history.
 
-Once recovered, the app connects locally with the saved key. No account or
-internet is needed after that.
+Opening the control channel while the audio link is active does not work
+reliably on macOS. By default, OpenNura therefore:
 
-### Back up your key
+1. identifies the active Nuraphone;
+2. briefly disconnects its audio link;
+3. opens the cached GAIA service over RFCOMM channel 1.
 
-Nura's servers may not stay online forever. In the **Devices** tab you can
-reveal and copy your key. Keep a copy somewhere safe; with it, the headphones
-remain controllable even if the backend disappears.
+This affects only the Nuraphone, not your other Bluetooth devices. You can turn
+off **Disconnect audio automatically** if you prefer to manage the audio link
+yourself.
 
-## How it works
+## Recover the device key
 
-The control protocol is Qualcomm GAIA carried over Bluetooth. Key recovery
-replays the official app's backend handshake (`app/session` → email login →
-`end_to_end/session/start` and its follow-ups), relaying the GAIA packets the
-server returns to the headphones and sending their replies back, until the
-server releases the persistent key. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-and [docs/KEY-RECOVERY.md](docs/KEY-RECOVERY.md) for detail, and
-[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) if something stalls.
+Each Nuraphone has a unique 16-byte AES key used to encrypt control commands.
+OpenNura needs that key before it can change settings.
 
-## Privacy and scope
+If you do not already have it:
 
-Key recovery signs in with **your own** Nura account and fetches **your own**
-device's key. Nothing uses a shared or bundled account, and no key is hardcoded
-in the source. This is interoperability with hardware you own, of a product line
-that has been discontinued.
+1. Connect the Nuraphone to the Mac.
+2. Open the **Devices** tab.
+3. Choose **Recover key from Nura**.
+4. Sign in with your Nura account email and verification code.
+5. Start recovery and leave the headphones powered on and worn while it runs.
 
-## Tests
+OpenNura relays the provisioning exchange between the headphones and Nura's
+backend, then saves the recovered key locally. Normal control is offline after
+that.
 
-Pure-logic units (msgpack, GAIA framing, backend response parsing) have a small
-test package:
+The **Devices** tab can reveal and copy the key. Store a backup somewhere safe:
+if Nura turns off the remaining backend, an existing key should still allow
+local control, but a new one cannot be recovered.
 
-```
+## Limitations
+
+- Only the original Nuraphone is supported at this time.
+- Initial control-channel setup briefly interrupts Bluetooth audio.
+- Key recovery depends on Nura's backend.
+- Some controls from the official app are not implemented.
+- Classic Bluetooth RFCOMM is available to this project on macOS, not iOS.
+
+If connection or recovery stalls, start with
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
+## Development
+
+The Xcode project builds the app and its platform-specific Bluetooth code.
+Protocol and parsing tests live in the Swift package:
+
+```sh
 swift test
 ```
 
-This does not build the UI or Bluetooth layers; the full app is built with
-Xcode.
+Those tests do not exercise the UI or a real Bluetooth connection.
 
-## Status and limitations
+Implementation notes:
 
-- Targets the classic **Nuraphone** (over-ears). Other Nura devices are not
-  supported.
-- Key recovery depends on Nura's backend still responding.
-- Several controls from the official app are not implemented.
-- macOS is the supported platform for key recovery; classic-Bluetooth RFCOMM is
-  not available to third-party apps on iOS.
+- [Architecture](docs/ARCHITECTURE.md)
+- [Key recovery](docs/KEY-RECOVERY.md)
+- [Roadmap](docs/ROADMAP.md)
 
-## Licence
+## Credits and licence
 
-GNU General Public License v3 (see [LICENSE](LICENSE)). The provisioning code is
-derived from the Apache-2.0 [Nura-Windows](https://github.com/CallumCarmicheal/Nura-Windows)
-project and is included under GPLv3 with attribution; see [NOTICE](NOTICE),
-[LICENSE-APACHE](LICENSE-APACHE), and [ATTRIBUTION.md](ATTRIBUTION.md).
+The provisioning flow is based on reverse-engineering from Callum Carmicheal's
+[Nura-Windows](https://github.com/CallumCarmicheal/Nura-Windows) project.
+Detailed provenance is recorded in [ATTRIBUTION.md](ATTRIBUTION.md) and
+[NOTICE](NOTICE).
+
+OpenNura is distributed under the
+[GNU General Public License v3](LICENSE). Code derived from Nura-Windows retains
+its Apache 2.0 attribution; see [LICENSE-APACHE](LICENSE-APACHE).
