@@ -8,10 +8,30 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
-            ControlTab(device: device)
-                .tabItem { Label("Control", systemImage: "headphones") }
-            DeviceKeysView()
-                .tabItem { Label("Devices", systemImage: "key") }
+            Group {
+                #if os(iOS)
+                NavigationStack {
+                    ControlTab(device: device)
+                        .navigationTitle("OpenNura")
+                        .navigationBarTitleDisplayMode(.inline)
+                }
+                #else
+                ControlTab(device: device)
+                #endif
+            }
+            .tabItem { Label("Control", systemImage: "headphones") }
+            Group {
+                #if os(iOS)
+                NavigationStack {
+                    DeviceKeysView()
+                        .navigationTitle("Devices")
+                        .navigationBarTitleDisplayMode(.inline)
+                }
+                #else
+                DeviceKeysView()
+                #endif
+            }
+            .tabItem { Label("Devices", systemImage: "key") }
             #if os(macOS)
             ShortcutsView(hotkeys: hotkeys)
                 .tabItem { Label("Shortcuts", systemImage: "command") }
@@ -54,7 +74,9 @@ struct ControlTab: View {
 
                 logsCard
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 24)
             .frame(maxWidth: 620)
             .frame(maxWidth: .infinity)
         }
@@ -100,12 +122,9 @@ struct ControlTab: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Nuraphone")
+                    Text("nuraphone")
                         .font(.title2.weight(.bold))
                     StatusBadge(phase: device.phase)
-                    Text(AppInfo.displayVersion)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
                 }
 
                 Spacer()
@@ -137,7 +156,7 @@ struct ControlTab: View {
     private var setupCard: some View {
         Card("Get started", systemImage: "sparkles") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Connect to control your Nuraphone. If you don't have a device key yet, recover it from Nura with your account.")
+                Text("Connect to control your Nuraphone. If you don't have your device key yet, recover it from Nura with your account.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
 
@@ -155,9 +174,6 @@ struct ControlTab: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 #endif
-                Label("The first time you connect, keep the in-ear tips out of your ears, just in case.", systemImage: "ear.badge.checkmark")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -378,11 +394,13 @@ struct ControlTab: View {
     }
 }
 
-#Preview {
-    let view = ContentView(device: NuraDeviceManager())
-    #if os(macOS)
-    return view.environmentObject(HotKeySettings())
-    #else
-    return view
-    #endif
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        let view = ContentView(device: NuraDeviceManager())
+        #if os(macOS)
+        return view.environmentObject(HotKeySettings())
+        #else
+        return view
+        #endif
+    }
 }

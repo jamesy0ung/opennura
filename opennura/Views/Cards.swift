@@ -3,6 +3,7 @@ import SwiftUI
 /// A rounded container used to group controls into tidy cards, with an optional
 /// titled header shown as a coloured icon tile plus label.
 struct Card<Content: View>: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     var title: String?
     var systemImage: String?
     var accent: Color
@@ -41,14 +42,14 @@ struct Card<Content: View>: View {
             }
             content()
         }
-        .padding(18)
+        .padding(horizontalSizeClass == .compact ? 16 : 18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: horizontalSizeClass == .compact ? 16 : 18, style: .continuous)
                 .fill(Color.primary.opacity(0.045))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: horizontalSizeClass == .compact ? 16 : 18, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }

@@ -6,6 +6,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
 
     @Published var phase: ConnectionPhase = .idle
     @Published var logs: [String] = []
+    /// Becomes non-nil only after a recovered key has been saved successfully.
+    /// This is the UI's completion event for the provisioning flow.
+    @Published private(set) var recoveredDeviceSerial: String?
 
     /// When on, connecting first disconnects the headphones' audio link (macOS
     /// only), so the control handshake is reliable without visiting Bluetooth
@@ -64,6 +67,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             return
         }
         mode = .provision
+        recoveredDeviceSerial = nil
         session = nil
         gaiaCommandBusy = false
         nuraKey = []
@@ -72,6 +76,12 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         addLog("Provisioning: scanning for nuraphone (make sure they're on and worn)...")
         transport.autoResetOnConnect = autoDisconnectAudio
         transport.scan()
+    }
+
+    /// Clears the transient completion event after the provisioning UI closes.
+    /// The saved device key itself is unaffected.
+    func clearRecoveredDeviceResult() {
+        recoveredDeviceSerial = nil
     }
 
     private func runProvisioningRelay(serial: Int, firmware: Int) {
@@ -114,6 +124,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
                     firmwareVersion: firmware,
                     maxPacketLength: maxPacket
                 )
+                recoveredDeviceSerial = String(serial)
                 addLog("Provisioning: device key recovered and saved for serial \(serial)")
                 mode = .control
                 // Continue straight into a normal encrypted session so the

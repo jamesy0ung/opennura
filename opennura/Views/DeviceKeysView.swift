@@ -38,7 +38,9 @@ struct DeviceKeysView: View {
                     }
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 24)
             .frame(maxWidth: 620)
             .frame(maxWidth: .infinity)
         }
@@ -75,6 +77,27 @@ struct DeviceKeysView: View {
     // MARK: - Pieces
 
     private var header: some View {
+        #if os(iOS)
+        HStack {
+            Text(devices.isEmpty ? "Your saved device keys" : "\(devices.count) saved \(devices.count == 1 ? "device" : "devices")")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                showImporter = true
+            } label: {
+                Label("Import", systemImage: "square.and.arrow.down")
+            }
+            .labelStyle(.iconOnly)
+            .accessibilityLabel("Import devices")
+            Button {
+                editorTarget = .add
+            } label: {
+                Label("Add", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        #else
         HStack {
             Text("Devices")
                 .font(.largeTitle.weight(.bold))
@@ -92,6 +115,7 @@ struct DeviceKeysView: View {
             }
             .buttonStyle(.borderedProminent)
         }
+        #endif
     }
 
     private var emptyCard: some View {
@@ -400,6 +424,8 @@ private func parseHexKey(_ s: String) -> [UInt8]? {
     return bytes
 }
 
-#Preview {
-    DeviceKeysView()
+struct DeviceKeysView_Previews: PreviewProvider {
+    static var previews: some View {
+        DeviceKeysView()
+    }
 }

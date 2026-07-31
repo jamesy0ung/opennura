@@ -16,7 +16,7 @@ struct ShortcutsView: View {
                     Toggle(isOn: $hotkeys.enabled) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Global hotkeys").font(.headline)
-                            Text("Work anywhere, even when the app isn't focused.")
+                            Text("Allow hotkeys to work when the app is not focused.")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                     }
@@ -31,12 +31,6 @@ struct ShortcutsView: View {
                     }
                     .disabled(!hotkeys.enabled)
                     .opacity(hotkeys.enabled ? 1 : 0.5)
-                }
-
-                Card(accent: .orange) {
-                    Label("The hotkeys drive the headphones live, so you need to be connected first (Control tab). Once connected you can keep listening and use the keys.", systemImage: "info.circle")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
 
                 Button("Reset to defaults") { hotkeys.resetToDefaults() }
