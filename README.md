@@ -37,6 +37,10 @@ that adds two things which make the app usable end-to-end on a Mac alone:
   recovers your headphone's long-lived device key straight from Nura's servers,
   then stores it locally so you can control the device offline afterwards.
 
+<p align="center">
+  <img src="docs/screenshots/main-screen.png" width="70%" alt="The main control screen: battery, noise control, sound mode, immersion, hearing profiles" />
+</p>
+
 ## Credits
 
 This is a macOS-focused fork of James Young's
@@ -70,6 +74,15 @@ licensing.
   the main window.
 - **Key recovery** — recover and store your headphone's device key on the Mac
   alone, with no iOS or Windows device.
+
+<p align="center">
+  <img src="docs/screenshots/profile-view.png" width="49%" alt="A hearing profile's signature curve" />
+  <img src="docs/screenshots/profile-comparison.png" width="42%" alt="Comparing the signatures of all profiles" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/touch-buttons.png" width="45%" alt="Remapping the touch buttons" />
+  <img src="docs/screenshots/menu-bar.png" width="40%" alt="The menu bar popover" />
+</p>
 
 ## What is the "device key"?
 
@@ -166,3 +179,10 @@ GNU General Public License v3 (see [LICENSE](LICENSE)). The provisioning code is
 derived from the Apache-2.0 [Nura-Windows](https://github.com/CallumCarmicheal/Nura-Windows)
 project and is included under GPLv3 with attribution; see [NOTICE](NOTICE),
 [LICENSE-APACHE](LICENSE-APACHE), and [ATTRIBUTION.md](ATTRIBUTION.md).
+
+## Trademarks
+
+"Nura" and "Nuraphone" are trademarks of their respective owners. This project
+is not affiliated with, endorsed by, or sponsored by Nura or its successors.
+The names are used solely to identify the hardware this software interoperates
+with.
