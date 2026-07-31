@@ -12,6 +12,10 @@ app, and can recover the device key tied to your Nura account.
 
 Other Nura products are not supported at this time. I do own a NuraLoop and NuraTrue Pro and I will perform testing when I have free time.
 
+<p align="center">
+  <img src="docs/screenshots/main-screen.png" width="72%" alt="OpenNura's main controls showing battery, sound mode, noise control and immersion" />
+</p>
+
 ## Caution
 
 This project uses an undocumented, reverse-engineered protocol. It is not made,
@@ -23,6 +27,34 @@ your ears. If you hear anything unusual, take it off and power it down.
 
 The controls have not been tested against every firmware version. The developer's nuraphones are on 606. **There is no
 warranty; use the software at your own risk.**
+
+## Profiles and controls
+
+### Hearing profiles
+
+Read a profile's stored hearing signature or compare several profiles at once.
+Nothing is played while reading these values.
+
+<p align="center">
+  <img src="docs/screenshots/profile-view.png" width="52%" alt="A Nuraphone hearing profile and its stored signature" />
+  <img src="docs/screenshots/profile-comparison.png" width="39%" alt="A comparison of two stored hearing profiles" />
+</p>
+
+### Touch controls
+
+Single- and double-tap actions can be read from the headphones and remapped.
+
+<p align="center">
+  <img src="docs/screenshots/touch-buttons.png" width="48%" alt="Remapping the Nuraphone's single- and double-tap controls" />
+</p>
+
+### Menu bar
+
+On macOS, the main controls are also available from a compact menu-bar popover.
+
+<p align="center">
+  <img src="docs/screenshots/menu-bar.png" width="42%" alt="OpenNura's macOS menu-bar controls" />
+</p>
 
 ## What you need
 
@@ -123,3 +155,8 @@ Detailed provenance is recorded in [ATTRIBUTION.md](ATTRIBUTION.md) and
 OpenNura is distributed under the
 [GNU General Public License v3](LICENSE). Code derived from Nura-Windows retains
 its Apache 2.0 attribution; see [LICENSE-APACHE](LICENSE-APACHE).
+
+“Nura” and “Nuraphone” are trademarks of their respective owners. OpenNura is
+not affiliated with, endorsed by or sponsored by Nura or its successors. The
+names are used only to identify the hardware with which the software
+interoperates.
