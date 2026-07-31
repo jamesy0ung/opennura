@@ -1,4 +1,5 @@
 #if os(macOS)
+import CoreAudio
 import Foundation
 @preconcurrency import IOBluetooth
 
@@ -25,8 +26,8 @@ final class ClassicBTTransport: NSObject, NuraTransport {
         }
     }
 
-    private var inquiry: IOBluetoothDeviceInquiry?
     private var rfcommChannel: IOBluetoothRFCOMMChannel?
+    private var intentionallyClosedChannels = Set<ObjectIdentifier>()
     private var frameBuffer = RFCOMMFrameBuffer()
     private var targetDevice: IOBluetoothDevice?
 
@@ -41,17 +42,139 @@ final class ClassicBTTransport: NSObject, NuraTransport {
 
     private static let sppUUID = IOBluetoothSDPUUID(uuid16: 0x1101)
 
-    private func freshNuraDevice() -> IOBluetoothDevice? {
-        guard let paired = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] else { return nil }
-        let nura = paired.filter { ($0.name ?? "").lowercased().contains("nura") }
-        return nura.first(where: { !($0.name ?? "").lowercased().contains("[le]") }) ?? nura.first
+    private func audioDeviceName(_ device: AudioDeviceID) -> String? {
+        var nameAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var unmanagedName: Unmanaged<CFString>?
+        var nameSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(
+            device, &nameAddress, 0, nil, &nameSize, &unmanagedName
+        ) == noErr, let unmanagedName else { return nil }
+        return (unmanagedName.takeRetainedValue() as String).lowercased()
+    }
+
+    private func audioDeviceUID(_ device: AudioDeviceID) -> String? {
+        var uidAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceUID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var unmanagedUID: Unmanaged<CFString>?
+        var uidSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(
+            device, &uidAddress, 0, nil, &uidSize, &unmanagedUID
+        ) == noErr, let unmanagedUID else { return nil }
+        return unmanagedUID.takeRetainedValue() as String
+    }
+
+    private func audioDeviceIDs() -> [AudioDeviceID] {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var byteCount: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &byteCount
+        ) == noErr else { return [] }
+
+        let count = Int(byteCount) / MemoryLayout<AudioDeviceID>.size
+        var devices = [AudioDeviceID](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            &byteCount,
+            &devices
+        ) == noErr else { return [] }
+        return devices
+    }
+
+    private func bluetoothAddress(fromAudioUID uid: String) -> String? {
+        let pattern = #"(?i)([0-9a-f]{2}[:-]){5}[0-9a-f]{2}"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(
+                  in: uid, range: NSRange(uid.startIndex..., in: uid)
+              ),
+              let range = Range(match.range, in: uid)
+        else { return nil }
+        return uid[range].replacingOccurrences(of: "-", with: ":")
+    }
+
+    private func classicDeviceForActiveAudioRoute(named deviceName: String) -> IOBluetoothDevice? {
+        let baseName = deviceName.lowercased().replacingOccurrences(of: " [le]", with: "")
+        for audioDevice in audioDeviceIDs() {
+            guard let routeName = audioDeviceName(audioDevice),
+                  (routeName == baseName
+                      || routeName.contains(baseName)
+                      || baseName.contains(routeName)),
+                  let uid = audioDeviceUID(audioDevice),
+                  let address = bluetoothAddress(fromAudioUID: uid)
+            else { continue }
+            return IOBluetoothDevice(addressString: address)
+        }
+        return nil
+    }
+
+    /// Names of Bluetooth devices currently published to Core Audio.
+    ///
+    /// On current macOS releases IOBluetoothDevice.isConnected() can remain
+    /// false for headphones that are connected and carrying audio. Core Audio's
+    /// device list is the reliable indication that an audio headset is present.
+    private func connectedBluetoothAudioDeviceNames() -> Set<String> {
+        var names = Set<String>()
+        for device in audioDeviceIDs() {
+            var transportAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyTransportType,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var transport: UInt32 = 0
+            var transportSize = UInt32(MemoryLayout<UInt32>.size)
+            guard AudioObjectGetPropertyData(
+                device, &transportAddress, 0, nil, &transportSize, &transport
+            ) == noErr,
+                transport == kAudioDeviceTransportTypeBluetooth
+                    || transport == kAudioDeviceTransportTypeBluetoothLE,
+                let name = audioDeviceName(device)
+            else { continue }
+            names.insert(name)
+        }
+
+        // Some macOS versions don't label the active headset with a Bluetooth
+        // transport type. The default output route is nevertheless authoritative:
+        // a paired device at another location cannot be the current output.
+        var defaultAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var defaultDevice = AudioDeviceID(0)
+        var defaultSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+        if AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &defaultAddress,
+            0,
+            nil,
+            &defaultSize,
+            &defaultDevice
+        ) == noErr, let name = audioDeviceName(defaultDevice), name.contains("nura") {
+            names.insert(name)
+        }
+        return names
     }
 
     func scan() {
         guard phase.isIdle else { return }
+        intentionallyClosedChannels.removeAll()
         // Defensive: release any channel left over from a prior connection, so
         // we don't try to reopen an already-registered RFCOMM channel id.
         if let stale = rfcommChannel {
+            intentionallyClosedChannels.insert(ObjectIdentifier(stale))
             stale.close()
             rfcommChannel = nil
         }
@@ -60,12 +183,63 @@ final class ClassicBTTransport: NSObject, NuraTransport {
         delegate?.transportDidLog("Classic BT: Looking for paired Nura devices...")
 
         if let paired = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] {
-            let nuraDevices = paired.filter { ($0.name ?? "").lowercased().contains("nura") }
-            // Prefer the Classic BR/EDR entry. The LE entry ("... [LE]") has no
-            // RFCOMM/SPP service record, so a Classic SDP query against it never
-            // completes and the connection hangs.
-            if let device = nuraDevices.first(where: { !($0.name ?? "").lowercased().contains("[le]") }) {
-                delegate?.transportDidLog("Found paired device: \"\(device.name ?? "")\"")
+            // On newer macOS versions pairedDevices() can expose only the LE
+            // companion entry even while the Classic audio device is active.
+            // recentDevices() still contains the Classic object needed for SDP.
+            let recent = (IOBluetoothDevice.recentDevices(0) as? [IOBluetoothDevice]) ?? []
+            var seenAddresses = Set<String>()
+            let candidates = (recent + paired).filter {
+                let key = $0.addressString ?? "\($0.name ?? "unnamed")|\(($0.name ?? "").contains("[LE]"))"
+                return seenAddresses.insert(key).inserted
+            }
+            let nuraDevices = candidates.filter { ($0.name ?? "").lowercased().contains("nura") }
+            let audioDeviceNames = connectedBluetoothAudioDeviceNames()
+            let pairedSummary = nuraDevices.map {
+                "\"\($0.name ?? "unnamed")\" (IOBluetooth connected: \($0.isConnected()))"
+            }.joined(separator: ", ")
+            delegate?.transportDidLog("Nura candidates: \(pairedSummary)")
+            delegate?.transportDidLog(
+                "Active Nura audio routes: \(audioDeviceNames.isEmpty ? "none" : audioDeviceNames.sorted().joined(separator: ", "))"
+            )
+            // A user may have several Nura products paired, including devices
+            // that are nowhere nearby. Only target the entry matching the active
+            // audio route. Do not reject a name ending in "[LE]": macOS retains
+            // that suffix after historical LE pairing, and the same device may
+            // still expose its Classic services when queried with IOBluetooth.
+            let activeNuraRoutes = audioDeviceNames.filter { $0.contains("nura") }
+            let connectedDevices = nuraDevices.filter { $0.isConnected() }
+
+            if activeNuraRoutes.count > 1 {
+                delegate?.transportDidLog(
+                    "Multiple active Nura audio routes found: \(activeNuraRoutes.sorted().joined(separator: ", "))"
+                )
+                phase = .failed("Multiple Nura audio devices are active; leave only one connected")
+                return
+            }
+
+            let device: IOBluetoothDevice?
+            let hasActiveAudioRoute: Bool
+            if let routeName = activeNuraRoutes.first {
+                device = classicDeviceForActiveAudioRoute(named: routeName)
+                hasActiveAudioRoute = true
+                guard device != nil else {
+                    delegate?.transportDidLog(
+                        "Active Nura audio route found, but its Classic Bluetooth address could not be resolved"
+                    )
+                    phase = .failed("Could not resolve the active Nura device's Classic Bluetooth address")
+                    return
+                }
+                delegate?.transportDidLog("Resolved Classic Bluetooth endpoint from active audio route")
+            } else if connectedDevices.count == 1 {
+                device = connectedDevices[0]
+                hasActiveAudioRoute = false
+            } else {
+                device = nil
+                hasActiveAudioRoute = false
+            }
+
+            if let device {
+                delegate?.transportDidLog("Found connected device: \"\(device.name ?? "")\"")
                 // Refuse to open the control channel while the headphones are
                 // connected for audio. Observed behaviour (fw 606): the
                 // nuraphone advertises GAIA on more than one RFCOMM channel, and
@@ -77,7 +251,7 @@ final class ClassicBTTransport: NSObject, NuraTransport {
                 // working channel. Live control while audio plays is fine ONCE a
                 // session is established; it's only the initial handshake that is
                 // unreliable during audio, so we gate the connect, not the use.
-                if device.isConnected() {
+                if device.isConnected() || hasActiveAudioRoute {
                     if autoResetOnConnect {
                         // Disconnect just this device's link (the equivalent of
                         // toggling it off in Bluetooth settings, but targeted so
@@ -88,12 +262,7 @@ final class ClassicBTTransport: NSObject, NuraTransport {
                         targetDevice = device
                         phase = .connecting
                         _ = device.closeConnection()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                            MainActor.assumeIsolated {
-                                guard let self, self.targetDevice != nil, self.phase == .connecting else { return }
-                                self.performSDPQueryAndConnect(device)
-                            }
-                        }
+                        openCachedChannelWhenDisconnected(device)
                         return
                     }
                     delegate?.transportDidLog("Refusing to connect: nuraphone is connected for audio. Turn on \"Disconnect audio automatically\", or disconnect it in macOS Bluetooth (keep it paired), then connect.")
@@ -101,41 +270,40 @@ final class ClassicBTTransport: NSObject, NuraTransport {
                     return
                 }
                 targetDevice = device
-                performSDPQueryAndConnect(device)
+                phase = .connecting
+                openCachedChannelWhenDisconnected(device)
                 return
             }
-            if let le = nuraDevices.first {
-                delegate?.transportDidLog("Only an LE entry is paired: \"\(le.name ?? "")\"")
-                phase = .failed("Only an LE entry is paired — pair the nuraphone as an audio device for Classic Bluetooth")
+            if !nuraDevices.isEmpty {
+                let reason = connectedDevices.count > 1
+                    ? "Multiple connected Nura devices found, but no active Nura audio route identifies which one to use"
+                    : "Paired Nura devices found, but none is currently connected"
+                delegate?.transportDidLog(reason)
+                phase = .failed(
+                    connectedDevices.count > 1
+                        ? "Multiple Nura devices are connected; select one as the audio output"
+                        : "Connect the Nura device in macOS Bluetooth, then try again"
+                )
                 return
             }
         }
 
-        delegate?.transportDidLog("No paired Nura device found, starting inquiry...")
-        guard let inq = IOBluetoothDeviceInquiry(delegate: self) else {
-            delegate?.transportDidLog("Failed to create device inquiry")
-            phase = .failed("Inquiry failed")
-            return
-        }
-        inq.inquiryLength = 15
-        inquiry = inq
-        inq.start()
+        delegate?.transportDidLog("No paired Nura device found")
+        phase = .failed("Pair and connect a Nura device in macOS Bluetooth, then try again")
     }
 
-    func stopScan() {
-        inquiry?.stop()
-        inquiry = nil
-    }
+    func stopScan() {}
 
     func disconnect() {
         timeoutTimer?.invalidate()
         timeoutTimer = nil
         failPending(NuraError.notReady)
-        rfcommChannel?.close()
+        if let channel = rfcommChannel {
+            intentionallyClosedChannels.insert(ObjectIdentifier(channel))
+            channel.close()
+        }
         rfcommChannel = nil
         targetDevice = nil
-        inquiry?.stop()
-        inquiry = nil
         phase = .idle
     }
 
@@ -223,22 +391,33 @@ final class ClassicBTTransport: NSObject, NuraTransport {
 
     // MARK: - Connect
 
-    private func performSDPQueryAndConnect(_ device: IOBluetoothDevice) {
-        phase = .connecting
-        startConnectTimeout()
-
-        // macOS's IOBluetooth must discover the RFCOMM channel through a live SDP
-        // query before the channel can be opened — opening a cached channel
-        // number directly fails with "No known channel cid N". Use the
-        // *unfiltered* performSDPQuery; the uuids:-filtered variant never
-        // delivers its completion callback. The channel is opened in
-        // sdpQueryComplete, once the query has registered it with the coordinator.
-        delegate?.transportDidLog("Performing SDP query...")
-        let result = device.performSDPQuery(self)
-        if result != kIOReturnSuccess {
-            delegate?.transportDidLog(String(format: "SDP query failed to start: 0x%08x", result))
-            phase = .failed("SDP query failed")
+    /// Waits for the audio/baseband link to finish closing, then immediately
+    /// opens the positively identified cached GAIA channel. Direct probing shows
+    /// that a fresh SDP query stalls after disconnection, while this sequence
+    /// reliably opens RFCOMM channel 1.
+    private func openCachedChannelWhenDisconnected(
+        _ device: IOBluetoothDevice,
+        checksRemaining: Int = 40
+    ) {
+        guard phase == .connecting, targetDevice != nil else { return }
+        if device.isConnected() {
+            guard checksRemaining > 0 else {
+                phase = .failed("Nuraphone audio link did not disconnect")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.openCachedChannelWhenDisconnected(
+                        device, checksRemaining: checksRemaining - 1
+                    )
+                }
+            }
+            return
         }
+
+        delegate?.transportDidLog("Audio link disconnected; opening cached GAIA service...")
+        startConnectTimeout()
+        openRFCOMMChannel(on: device)
     }
 
     /// Resolves the GAIA RFCOMM channel from the device's SDP records.
@@ -311,19 +490,24 @@ final class ClassicBTTransport: NSObject, NuraTransport {
                 // macOS's RFCOMM coordinator can leave channel id 1 half-open
                 // after a prior connection, so the first open attempt stalls.
                 // Tear down and retry with a fresh device handle a few times.
-                self.rfcommChannel?.close()
+                if let channel = self.rfcommChannel {
+                    self.intentionallyClosedChannels.insert(ObjectIdentifier(channel))
+                    channel.close()
+                }
                 self.rfcommChannel = nil
 
-                if self.connectAttempt < self.maxConnectAttempts, let device = self.freshNuraDevice() {
+                // Keep retrying the device selected at scan time. With automatic
+                // audio disconnection enabled it is intentionally no longer
+                // reported as connected, so re-selecting from the paired-device
+                // list could switch to a different Nura product.
+                if self.connectAttempt < self.maxConnectAttempts, let device = self.targetDevice {
                     self.connectAttempt += 1
                     self.delegate?.transportDidLog("Channel open stalled, retrying (\(self.connectAttempt)/\(self.maxConnectAttempts))...")
-                    self.targetDevice = device
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                        MainActor.assumeIsolated {
-                            guard let self, self.phase == .connecting else { return }
-                            self.performSDPQueryAndConnect(device)
-                        }
+                    if device.isConnected() {
+                        self.delegate?.transportDidLog("Audio reconnected; disconnecting it before retry...")
+                        _ = device.closeConnection()
                     }
+                    self.openCachedChannelWhenDisconnected(device)
                 } else {
                     let audioHeld = self.targetDevice?.isConnected() ?? false
                     self.delegate?.transportDidLog("Connection timed out (SDP/RFCOMM)")
@@ -404,63 +588,6 @@ final class ClassicBTTransport: NSObject, NuraTransport {
     }
 }
 
-// MARK: - IOBluetoothDeviceAsyncCallbacks (SDP query completion)
-
-extension ClassicBTTransport: IOBluetoothDeviceAsyncCallbacks {
-    nonisolated func remoteNameRequestComplete(_ device: IOBluetoothDevice, status: IOReturn) {}
-
-    nonisolated func connectionComplete(_ device: IOBluetoothDevice, status: IOReturn) {}
-
-    nonisolated func sdpQueryComplete(_ device: IOBluetoothDevice, status: IOReturn) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            if status == kIOReturnSuccess {
-                self.delegate?.transportDidLog("SDP query complete")
-            } else {
-                self.delegate?.transportDidLog(String(format: "SDP query returned 0x%08x; attempting open anyway", status))
-            }
-            self.openRFCOMMChannel(on: device)
-        }
-    }
-}
-
-// MARK: - IOBluetoothDeviceInquiryDelegate
-
-extension ClassicBTTransport: IOBluetoothDeviceInquiryDelegate {
-
-    nonisolated func deviceInquiryDeviceFound(
-        _ sender: IOBluetoothDeviceInquiry,
-        device: IOBluetoothDevice
-    ) {
-        let name = device.name ?? ""
-        guard name.lowercased().contains("nura") else { return }
-
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            sender.stop()
-            self.inquiry = nil
-            self.targetDevice = device
-            self.delegate?.transportDidLog("Inquiry found: \"\(name)\"")
-            self.performSDPQueryAndConnect(device)
-        }
-    }
-
-    nonisolated func deviceInquiryComplete(
-        _ sender: IOBluetoothDeviceInquiry,
-        error: IOReturn,
-        aborted: Bool
-    ) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.inquiry = nil
-            if !aborted, case .scanning = self.phase {
-                self.delegate?.transportDidLog("Inquiry complete, no Nura device found")
-                self.phase = .failed("No device found")
-            }
-        }
-    }
-}
-
 // MARK: - IOBluetoothRFCOMMChannelDelegate
 
 extension ClassicBTTransport: IOBluetoothRFCOMMChannelDelegate {
@@ -471,6 +598,14 @@ extension ClassicBTTransport: IOBluetoothRFCOMMChannelDelegate {
     ) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            guard self.rfcommChannel === rfcommChannel else {
+                self.delegate?.transportDidLog("Ignoring stale RFCOMM open callback")
+                if error == kIOReturnSuccess {
+                    self.intentionallyClosedChannels.insert(ObjectIdentifier(rfcommChannel))
+                    rfcommChannel.close()
+                }
+                return
+            }
             if error == kIOReturnSuccess {
                 self.delegate?.transportDidLog("RFCOMM channel opened successfully")
                 self.phase = .handshaking
@@ -498,6 +633,15 @@ extension ClassicBTTransport: IOBluetoothRFCOMMChannelDelegate {
     nonisolated func rfcommChannelClosed(_ rfcommChannel: IOBluetoothRFCOMMChannel) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            let identifier = ObjectIdentifier(rfcommChannel)
+            if self.intentionallyClosedChannels.remove(identifier) != nil {
+                self.delegate?.transportDidLog("RFCOMM channel closed intentionally")
+                return
+            }
+            guard self.rfcommChannel === rfcommChannel else {
+                self.delegate?.transportDidLog("Ignoring stale RFCOMM close callback")
+                return
+            }
             self.delegate?.transportDidLog("RFCOMM channel closed")
             self.rfcommChannel = nil
             self.targetDevice = nil
