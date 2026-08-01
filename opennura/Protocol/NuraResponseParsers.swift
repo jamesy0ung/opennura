@@ -70,22 +70,27 @@ enum NuraResponseParsers {
         return NuraClassicKickitParams(drcRaw: payload[0], lpfRaw: payload[1], gainRaw: payload[2])
     }
 
+    /// Decodes however many slots the response actually contains, rather than
+    /// requiring an exact match to what `supportsDoubleTap`/`supportsTripleTap`
+    /// predict - some units reply with fewer bytes than their family's
+    /// capability model expects.
     static func decodeButtonConfiguration(
         _ payload: [UInt8],
         supportsDoubleTap: Bool,
         supportsTripleTap: Bool
     ) -> NuraButtonConfiguration? {
-        let expectedLength = supportsTripleTap ? 8 : (supportsDoubleTap ? 6 : 2)
-        guard payload.count == expectedLength else { return nil }
+        guard payload.count >= 2 else { return nil }
+        let hasDouble = supportsDoubleTap && payload.count >= 6
+        let hasTriple = supportsTripleTap && payload.count >= 8
         return NuraButtonConfiguration(
             leftSingleTap: NuraButtonFunction.fromRawByte(payload[0]),
             rightSingleTap: NuraButtonFunction.fromRawByte(payload[1]),
-            leftDoubleTap: supportsDoubleTap ? NuraButtonFunction.fromRawByte(payload[2]) : nil,
-            rightDoubleTap: supportsDoubleTap ? NuraButtonFunction.fromRawByte(payload[3]) : nil,
-            leftTapAndHold: supportsDoubleTap ? NuraButtonFunction.fromRawByte(payload[4]) : nil,
-            rightTapAndHold: supportsDoubleTap ? NuraButtonFunction.fromRawByte(payload[5]) : nil,
-            leftTripleTap: supportsTripleTap ? NuraButtonFunction.fromRawByte(payload[6]) : nil,
-            rightTripleTap: supportsTripleTap ? NuraButtonFunction.fromRawByte(payload[7]) : nil
+            leftDoubleTap: hasDouble ? NuraButtonFunction.fromRawByte(payload[2]) : nil,
+            rightDoubleTap: hasDouble ? NuraButtonFunction.fromRawByte(payload[3]) : nil,
+            leftTapAndHold: hasDouble ? NuraButtonFunction.fromRawByte(payload[4]) : nil,
+            rightTapAndHold: hasDouble ? NuraButtonFunction.fromRawByte(payload[5]) : nil,
+            leftTripleTap: hasTriple ? NuraButtonFunction.fromRawByte(payload[6]) : nil,
+            rightTripleTap: hasTriple ? NuraButtonFunction.fromRawByte(payload[7]) : nil
         )
     }
 

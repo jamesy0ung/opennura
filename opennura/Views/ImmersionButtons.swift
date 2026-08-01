@@ -3,6 +3,8 @@ import SwiftUI
 struct ImmersionSlider: View {
     let current: Int
     let onSelect: (Int) -> Void
+    /// -2...4 on the classic Nuraphone; NuraTrue Pro's range is -3...+3.
+    var range: ClosedRange<Int> = -2...4
 
     var body: some View {
         VStack(spacing: 4) {
@@ -11,7 +13,7 @@ struct ImmersionSlider: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
             HStack(spacing: 6) {
-                ForEach(-2...4, id: \.self) { level in
+                ForEach(Array(range), id: \.self) { level in
                     Button {
                         onSelect(level)
                     } label: {
@@ -32,24 +34,27 @@ struct ImmersionSlider: View {
     }
 
     private func levelLabel(_ level: Int) -> String {
-        switch level {
-        case 4: return "Maximum"
-        case 3: return "High"
-        case 2: return "Medium-High"
-        case 1: return "Medium"
-        case 0: return "Neutral"
-        case -1: return "Low"
-        case -2: return "Minimum"
-        default: return ""
+        if range == -2...4 {
+            switch level {
+            case 4: return "Maximum"
+            case 3: return "High"
+            case 2: return "Medium-High"
+            case 1: return "Medium"
+            case 0: return "Neutral"
+            case -1: return "Low"
+            case -2: return "Minimum"
+            default: break
+            }
         }
+        if level == range.upperBound { return "Maximum" }
+        if level == range.lowerBound { return "Minimum" }
+        if level == 0 { return "Neutral" }
+        return level > 0 ? "+\(level)" : "\(level)"
     }
 
     private func levelColor(_ level: Int) -> Color {
-        switch level {
-        case 3...4: return .purple
-        case 1...2: return .blue
-        case 0: return .gray
-        default: return .orange
-        }
+        if level == 0 { return .gray }
+        if level > 0 { return level >= range.upperBound - 1 ? .purple : .blue }
+        return .orange
     }
 }

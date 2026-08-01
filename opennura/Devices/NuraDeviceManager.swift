@@ -286,7 +286,8 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         guard phase.isReady else { return }
         let profileId = UInt8(state.profileId ?? 0)
         addLog("-> SetAncLevel \(level)")
-        sendEncrypted(opcode: cmdSetAncLevel, params: [profileId, UInt8(level)]) { [weak self] result in
+        let opcode = family == .nuraTruePro ? cmdProSetAncLevel : cmdSetAncLevel
+        sendEncrypted(opcode: opcode, params: [profileId, UInt8(level)]) { [weak self] result in
             switch result {
             case .success:
                 self?.state.ancLevel = level
@@ -295,12 +296,18 @@ final class NuraDeviceManager: NSObject, ObservableObject {
                 self?.addLog("<- SetAncLevel error: \(e.localizedDescription)")
             }
         }
+        // Picking a level should be audible immediately even if noise
+        // control was off.
+        if family == .nuraTruePro {
+            setGlobalAncEnabled(true)
+        }
     }
 
     func setGlobalAncEnabled(_ enabled: Bool) {
         guard phase.isReady else { return }
         let profileId = UInt8(state.profileId ?? 0)
-        sendEncrypted(opcode: cmdSetGlobalAncEnabled, params: [profileId, enabled ? 0x01 : 0x00]) { [weak self] result in
+        let opcode = family == .nuraTruePro ? cmdProSetGlobalAncEnabled : cmdSetGlobalAncEnabled
+        sendEncrypted(opcode: opcode, params: [profileId, enabled ? 0x01 : 0x00]) { [weak self] result in
             if case .success = result { self?.state.globalAncEnabled = enabled }
         }
     }
@@ -312,21 +319,26 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             addLog("Not ready")
             return
         }
-        // The payload is [profileId, drc, lpf, gain]. Immersion is per-profile,
-        // so this must target the currently selected profile - previously the
-        // profile id was hardcoded to 0, so it only ever affected Profile 1.
         let profileId = UInt8(state.profileId ?? 0)
-        addLog("-> SetKickitParams profile \(profileId) level \(level)")
-        sendEncrypted(
-            opcode: cmdSetKickitParams,
-            params: [profileId] + kickitParams(for: level)
-        ) { [weak self] result in
+        addLog("-> SetImmersion profile \(profileId) level \(level)")
+        let opcode: UInt16
+        let params: [UInt8]
+        if family == .nuraTruePro {
+            // Range is -3...+3, so the raw byte is offset by 3, plus a
+            // trailing flag byte that was always 0x01 in the capture.
+            opcode = cmdProSetImmersion
+            params = [profileId, UInt8(level + 3), 0x01]
+        } else {
+            opcode = cmdSetKickitParams
+            params = [profileId] + kickitParams(for: level)
+        }
+        sendEncrypted(opcode: opcode, params: params) { [weak self] result in
             switch result {
             case .success:
                 self?.state.immersionLevel = level
                 self?.addLog("<- Immersion set to \(level) (profile \(profileId))")
             case .failure(let e):
-                self?.addLog("<- SetKickitParams error: \(e.localizedDescription)")
+                self?.addLog("<- SetImmersion error: \(e.localizedDescription)")
             }
         }
     }
@@ -339,7 +351,10 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         let previous = state.personalisationMode
         state.personalisationMode = mode
         addLog("-> SetPersonalisedMode \(mode.rawValue)")
-        sendEncrypted(opcode: cmdSetPersonalisedMode, params: [mode.byte]) { [weak self] result in
+        let opcode = family == .nuraTruePro ? cmdProSetPersonalisedMode : cmdSetPersonalisedMode
+        // Inverted from the legacy byte on this device (confirmed on-device).
+        let byte: UInt8 = family == .nuraTruePro ? (mode == .personalised ? 0x00 : 0x01) : mode.byte
+        sendEncrypted(opcode: opcode, params: [byte]) { [weak self] result in
             switch result {
             case .success:
                 self?.addLog("<- Sound mode \(mode.rawValue)")
@@ -354,7 +369,16 @@ final class NuraDeviceManager: NSObject, ObservableObject {
 
     func setSpatialEnabled(_ enabled: Bool) {
         guard phase.isReady else { return }
-        sendEncrypted(opcode: cmdSetSpatialState, params: [enabled ? 0x01 : 0x00]) { [weak self] result in
+        let opcode: UInt16
+        let params: [UInt8]
+        if family == .nuraTruePro {
+            opcode = cmdProSetSpatialState
+            params = [UInt8(state.profileId ?? 0), enabled ? 0x01 : 0x00]
+        } else {
+            opcode = cmdSetSpatialState
+            params = [enabled ? 0x01 : 0x00]
+        }
+        sendEncrypted(opcode: opcode, params: params) { [weak self] result in
             if case .success = result { self?.state.spatialEnabled = enabled }
         }
     }
@@ -403,7 +427,8 @@ final class NuraDeviceManager: NSObject, ObservableObject {
 
     func setButtonConfiguration(_ config: NuraButtonConfiguration) {
         guard phase.isReady else { return }
-        let bytes = config.toBytes(supportsDoubleTap: true, supportsTripleTap: false)
+        let caps = NuraButtonCapabilities.for(family)
+        let bytes = config.toBytes(supportsDoubleTap: caps.supportsDoubleTap, supportsTripleTap: caps.supportsTripleTap)
         let profileId = UInt8(state.profileId ?? 0)
         sendEncrypted(opcode: cmdSetButtonConfigV1, params: [profileId] + bytes) { [weak self] result in
             if case .success = result { self?.state.buttons = config }
@@ -555,12 +580,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
     }
 
     private func deviceTypeName(forSerial serial: Int) -> String {
-        switch serial {
-        case 0..<20_000_000: return "Nuraphone"
-        case 20_000_000..<30_000_000: return "NuraLoop"
-        case 70_000_000..<90_000_000: return "NuraTrue Pro"
-        default: return "Nura device"
-        }
+        NuraDeviceFamily.forSerial(serial).displayName
     }
 
     private func persistConnectedDeviceIdentity(serial: Int) {
@@ -736,6 +756,12 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         (state.deviceInfo?.firmwareVersion ?? 0) > 510
     }
 
+    /// The connected device's product family, inferred from its serial number.
+    /// `.unknown` before a device-info response has arrived.
+    var family: NuraDeviceFamily {
+        NuraDeviceFamily.forSerial(state.deviceInfo?.serialNumber)
+    }
+
     /// Reads the visualisation for every populated profile in turn (used by the
     /// comparison view). Sequential because only one encrypted command is in
     /// flight at a time. Pure reads; nothing is played.
@@ -760,23 +786,41 @@ final class NuraDeviceManager: NSObject, ObservableObject {
 
     // MARK: - Quick actions (used by global hotkeys)
 
-    /// Steps immersion by delta, clamped to the supported -2...4 range. Returns
-    /// the new level for feedback.
+    /// Steps immersion by delta, clamped to the device's supported range
+    /// (-2...4 classic, -3...+3 on NuraTrue Pro). Returns the new level for
+    /// feedback.
     @discardableResult
     func immersionStep(_ delta: Int) -> Int {
-        let newLevel = max(-2, min(4, state.immersionLevel + delta))
+        let range = family == .nuraTruePro ? (-3...3) : (-2...4)
+        let newLevel = max(range.lowerBound, min(range.upperBound, state.immersionLevel + delta))
         setImmersion(newLevel)
         return newLevel
     }
 
-    /// Toggles between ANC and Passthrough (social). If noise control is off,
-    /// turns ANC on. Returns the mode it switched to.
+    /// Toggles noise control between its two extremes: the boolean
+    /// ANC/Passthrough pair on the Nuraphone, or the 0...6 level continuum
+    /// (below the midpoint jumps to full ANC, otherwise full social) on
+    /// every device since NuraLoop.
     @discardableResult
     func toggleAncSocial() -> NuraAncMode {
-        let current = state.anc?.mode ?? .off
-        let target: NuraAncMode = (current == .anc) ? .passthrough : .anc
-        setAncMode(target)
-        return target
+        guard family.usesAncLevel else {
+            let current = state.anc?.mode ?? .off
+            let target: NuraAncMode = (current == .anc) ? .passthrough : .anc
+            setAncMode(target)
+            return target
+        }
+        if family == .nuraTruePro {
+            // Default an unknown level to 6 so an uncertain toggle lands on
+            // transparency, the safer default.
+            let current = state.ancLevel ?? 6
+            let target = current >= 4 ? 0 : 6
+            setAncLevel(target)
+            return target == 6 ? .anc : .passthrough
+        }
+        let current = state.ancLevel ?? 0
+        let target = current >= 4 ? 0 : 6
+        setAncLevel(target)
+        return target >= 4 ? .passthrough : .anc
     }
 
     /// Cycles to the next/previous populated profile. Returns the profile id it
@@ -823,10 +867,13 @@ final class NuraDeviceManager: NSObject, ObservableObject {
     /// screen). Not part of the automatic connect sequence.
     func refreshButtonConfig() {
         guard phase.isReady else { return }
+        let caps = NuraButtonCapabilities.for(family)
         addLog("-> GetButtonConfig (requested)")
         sendEncrypted(opcode: cmdGetButtonConfigV1, params: [UInt8(state.profileId ?? 0)]) { [weak self] result in
             if case .success(let pt) = result,
-               let config = NuraResponseParsers.decodeButtonConfiguration(pt, supportsDoubleTap: true, supportsTripleTap: false) {
+               let config = NuraResponseParsers.decodeButtonConfiguration(
+                   pt, supportsDoubleTap: caps.supportsDoubleTap, supportsTripleTap: caps.supportsTripleTap
+               ) {
                 self?.state.buttons = config
                 self?.addLog("<- button config loaded")
             } else {
