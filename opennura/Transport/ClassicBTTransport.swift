@@ -542,7 +542,7 @@ final class ClassicBTTransport: NSObject, NuraTransport {
                     continue
                 }
 
-                if response.rawCommandId == cmdEventNotification {
+                if response.isAck, response.commandId == (cmdEventNotification & 0x1FFF) {
                     delegate?.transportDidReceiveIndication(response)
                     continue
                 }
@@ -565,7 +565,7 @@ final class ClassicBTTransport: NSObject, NuraTransport {
                     continue
                 }
 
-                if response.rawCommandId == pendingAck {
+                if response.isAck, response.commandId == (pendingAck & 0x1FFF) {
                     if response.payload.count < pendingMinLen {
                         delegate?.transportDidLog(
                             String(

@@ -61,10 +61,14 @@ let cmdSetButtonConfigV1: UInt16 = 0x00B6
 let cmdGetButtonConfigV1: UInt16 = 0x00B7
 let cmdGetVisualisationData: UInt16 = 0x00B8
 
-// MARK: - Nuraphone BD address suffix for BLE matching
+// MARK: - Known-device BD address suffixes for BLE matching
 
 let nuraphoneBdAddrSuffix: [UInt8] = [
     0x74, 0x1a, 0xe0, 0x21, 0x07, 0x86,
+]
+
+let denonPerlProBdAddrSuffix: [UInt8] = [
+    0x8c, 0xa9, 0x6f, 0x1f, 0x80, 0x0e,
 ]
 
 // MARK: - Errors & state

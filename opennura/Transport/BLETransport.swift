@@ -58,7 +58,7 @@ final class BLETransport: NSObject, NuraTransport {
         let standardServiceUUIDs = [CBUUID(string: "180A"), CBUUID(string: "180F")]
         let namedConnected = standardServiceUUIDs
             .flatMap { central.retrieveConnectedPeripherals(withServices: [$0]) }
-            .filter { ($0.name ?? "").lowercased().contains("nura") }
+            .filter { BLETransport.nameMatchesNuraProduct($0.name ?? "") }
         var seenIdentifiers = Set<UUID>()
         let connected = (gaiaConnected + namedConnected).filter {
             seenIdentifiers.insert($0.identifier).inserted
@@ -92,6 +92,17 @@ final class BLETransport: NSObject, NuraTransport {
 
     func stopScan() {
         central.stopScan()
+    }
+
+    /// True for a genuine Nura product name, or a Denon Perl / Perl Pro
+    /// (a rebadged NuraTrue / NuraTrue Pro running the same GAIA firmware
+    /// under a different advertised name - see docs/DENON-NURATRUE-PRO.md).
+    /// Shared by both the already-connected-peripheral lookup in scan() and
+    /// the live-advertisement matcher in didDiscover, so the two paths can't
+    /// drift out of sync again.
+    nonisolated static func nameMatchesNuraProduct(_ name: String) -> Bool {
+        let n = name.lowercased()
+        return n.contains("nura") || n.contains("denon") || n.contains("perl")
     }
 
     func disconnect() {
@@ -261,9 +272,10 @@ extension BLETransport: CBCentralManagerDelegate {
             ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
             ?? "<no name>"
         let advertisedServices = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID]) ?? []
-        // Match the Nura product family (Nuraphone, NuraLoop, etc.). The
-        // device-info exchange remains the safety gate before authentication.
-        var match = name.lowercased().contains("nura")
+        // Match the Nura product family (Nuraphone, NuraLoop, etc.) or a
+        // Denon-badged Perl / Perl Pro. The device-info exchange remains the
+        // safety gate before authentication.
+        var match = BLETransport.nameMatchesNuraProduct(name)
         if !match {
             // Any device advertising the Qualcomm GAIA service is a candidate,
             // regardless of the name it broadcasts.
@@ -272,7 +284,8 @@ extension BLETransport: CBCentralManagerDelegate {
         if !match,
             let mfg = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data
         {
-            match = [UInt8](mfg).suffix(6) == ArraySlice(nuraphoneBdAddrSuffix)
+            let suffix = [UInt8](mfg).suffix(6)
+            match = suffix == ArraySlice(nuraphoneBdAddrSuffix) || suffix == ArraySlice(denonPerlProBdAddrSuffix)
         }
 
         MainActor.assumeIsolated {
@@ -446,7 +459,7 @@ extension BLETransport: CBPeripheralDelegate {
             else { return }
             guard response.vendorId == gaiaVendor else { return }
 
-            if response.rawCommandId == cmdEventNotification {
+            if response.isAck, response.commandId == (cmdEventNotification & 0x1FFF) {
                 delegate?.transportDidReceiveIndication(response)
                 return
             }
@@ -464,7 +477,7 @@ extension BLETransport: CBPeripheralDelegate {
                 return
             }
 
-            if response.rawCommandId == pendingAck {
+            if response.isAck, response.commandId == (pendingAck & 0x1FFF) {
                 if response.payload.count < pendingMinLen {
                     delegate?.transportDidLog(
                         String(
