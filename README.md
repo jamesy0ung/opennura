@@ -10,7 +10,7 @@ app, and can recover the device key tied to your Nura account.
 - global shortcuts and a menu bar controller
 - device-key recovery
 
-Other Nura products are not supported at this time. I do own a NuraLoop and NuraTrue Pro and I will perform testing when I have free time.
+NuraLoop, NuraTrue Pro and Denon PerL Pro are also supported, however not much testing has been done yet. I will do this when I have time.
 
 <p align="center">
   <img src="docs/screenshots/main-screen.png" width="72%" alt="OpenNura's main controls showing battery, sound mode, noise control and immersion" />
@@ -33,7 +33,6 @@ warranty; use the software at your own risk.**
 ### Hearing profiles
 
 Read a profile's stored hearing signature or compare several profiles at once.
-Nothing is played while reading these values.
 
 <p align="center">
   <img src="docs/screenshots/profile-view.png" width="52%" alt="A Nuraphone hearing profile and its stored signature" />
@@ -100,6 +99,8 @@ yourself.
 
 Each Nuraphone has a unique 16-byte AES key used to encrypt control commands.
 OpenNura needs that key before it can change settings.
+
+Denon PerL Pro does not support key recovery at the moment, it is a low priority item for me, as you can still grab it from the Keychain, and Denon is still releasing new products with the Denon Headphones app. You will just need to import the device serial and key manually.
 
 If you do not already have it:
 
