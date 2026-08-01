@@ -239,6 +239,7 @@ final class ClassicBTTransport: NSObject, NuraTransport {
             }
 
             if let device {
+                delegate?.transportDidSelectDevice(named: device.name ?? "Nura device")
                 delegate?.transportDidLog("Found connected device: \"\(device.name ?? "")\"")
                 // Refuse to open the control channel while the headphones are
                 // connected for audio. Observed behaviour (fw 606): the
@@ -258,15 +259,15 @@ final class ClassicBTTransport: NSObject, NuraTransport {
                         // it doesn't touch the keyboard/mouse), then connect once
                         // it has settled into the paired-but-not-connected state
                         // where channel resolution is reliable.
-                        delegate?.transportDidLog("Nuraphone is connected for audio; disconnecting that link first for a clean control connection...")
+                        delegate?.transportDidLog("\(device.name ?? "Nura device") is connected for audio; disconnecting that link first for a clean control connection...")
                         targetDevice = device
                         phase = .connecting
                         _ = device.closeConnection()
                         openCachedChannelWhenDisconnected(device)
                         return
                     }
-                    delegate?.transportDidLog("Refusing to connect: nuraphone is connected for audio. Turn on \"Disconnect audio automatically\", or disconnect it in macOS Bluetooth (keep it paired), then connect.")
-                    phase = .failed("Disconnect the nuraphone's audio first (keep it paired), then connect")
+                    delegate?.transportDidLog("Refusing to connect: \(device.name ?? "Nura device") is connected for audio. Turn on \"Disconnect audio automatically\", or disconnect it in macOS Bluetooth (keep it paired), then connect.")
+                    phase = .failed("Disconnect the Nura device's audio first (keep it paired), then connect")
                     return
                 }
                 targetDevice = device

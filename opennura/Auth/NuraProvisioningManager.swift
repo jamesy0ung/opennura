@@ -380,7 +380,14 @@ final class NuraProvisioningManager: ObservableObject {
     }
 
     /// Re-reads devices from disk, updates the key for `serial`, and saves.
-    func saveDeviceKey(_ base64Key: String, serial: Int, firmwareVersion: Int, maxPacketLength: Int) {
+    func saveDeviceKey(
+        _ base64Key: String,
+        serial: Int,
+        firmwareVersion: Int,
+        maxPacketLength: Int,
+        friendlyName: String,
+        deviceType: String
+    ) {
         var latest = configStore.load()
         _ = latest.ensureUuid()
         latest.auth = config.auth
@@ -394,10 +401,14 @@ final class NuraProvisioningManager: ObservableObject {
             existing.firmwareVersion = firmwareVersion
             existing.maxPacketLengthHint = maxPacketLength
             existing.lastProvisionedUtc = isoNow
+            existing.friendlyName = friendlyName
+            existing.type = deviceType
             latest.upsertDevice(existing)
         } else {
             let entry = NuraDeviceConfigEntry(
+                type: deviceType,
                 deviceSerial: serialString,
+                friendlyName: friendlyName,
                 firmwareVersion: firmwareVersion,
                 maxPacketLengthHint: maxPacketLength,
                 lastProvisionedUtc: isoNow,

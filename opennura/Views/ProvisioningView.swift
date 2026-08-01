@@ -305,6 +305,7 @@ struct ProvisioningView: View {
                 statusSection
                 explanationSection
             }
+            .formStyle(.grouped)
             .navigationTitle("Recover Device Key")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -312,7 +313,7 @@ struct ProvisioningView: View {
                 }
             }
         }
-        .frame(minWidth: 420, minHeight: 460)
+        .frame(width: 600, height: 560)
         .onAppear {
             if email.isEmpty { email = provisioning.userEmail ?? "" }
         }
@@ -374,7 +375,7 @@ struct ProvisioningView: View {
                 errorText = nil
                 device.fetchDeviceKey()
             } label: {
-                Label("Recover key from connected nuraphone", systemImage: "key.horizontal")
+                Label("Recover key from connected Nura device", systemImage: "key.horizontal")
             }
             .disabled(provisioning.isBusy || !device.phase.isIdle)
 
@@ -385,14 +386,7 @@ struct ProvisioningView: View {
             Text("Signed in")
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Recovery talks to both the headphone and the Nura backend and can take up to a minute.")
-                Label {
-                    Text("Tip: the nuraphone should be **paired but not connected** for audio. If it's connected, disconnect it in Bluetooth settings first (leave it paired), then Recover.")
-                } icon: {
-                    Image(systemName: "lightbulb")
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                Text("Key retrieval relays challenge-response authentication between your Nuraphone and Nura’s backend, and can take up to a minute")
             }
         }
     }
@@ -422,6 +416,7 @@ struct ProvisioningView: View {
             Text("Each nuraphone has a unique device key that is used to encrypt the session. This recovers the key from Nura's servers using your account, and persists it so you can connect without the account or offline.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

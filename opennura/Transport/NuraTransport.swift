@@ -1,6 +1,7 @@
 import Foundation
 
 protocol NuraTransportDelegate: AnyObject {
+    func transportDidSelectDevice(named name: String)
     func transportDidUpdatePhase(_ phase: ConnectionPhase)
     func transportDidReceiveIndication(_ response: GaiaResponse)
     func transportDidLog(_ message: String)

@@ -1,11 +1,21 @@
 import Combine
 import Foundation
 
+#if os(macOS)
+enum MacBluetoothTransport: String, CaseIterable, Identifiable {
+    case rfcomm = "RFCOMM"
+    case btle = "BTLE"
+
+    var id: Self { self }
+}
+#endif
+
 @MainActor
 final class NuraDeviceManager: NSObject, ObservableObject {
 
     @Published var phase: ConnectionPhase = .idle
     @Published var logs: [String] = []
+    @Published private(set) var connectedDeviceName = "Nura device"
     /// Becomes non-nil only after a recovered key has been saved successfully.
     /// This is the UI's completion event for the provisioning flow.
     @Published private(set) var recoveredDeviceSerial: String?
@@ -16,6 +26,17 @@ final class NuraDeviceManager: NSObject, ObservableObject {
     @Published var autoDisconnectAudio: Bool = UserDefaults.standard.object(forKey: "autoDisconnectAudio") as? Bool ?? true {
         didSet { UserDefaults.standard.set(autoDisconnectAudio, forKey: "autoDisconnectAudio") }
     }
+
+    #if os(macOS)
+    /// Transport used for the next connection. Original Nuraphones generally
+    /// use RFCOMM; products such as NuraLoop expose the GAIA channel over BLE.
+    @Published var macBluetoothTransport: MacBluetoothTransport {
+        didSet {
+            UserDefaults.standard.set(macBluetoothTransport.rawValue, forKey: "macBluetoothTransport")
+            replaceTransportForMac()
+        }
+    }
+    #endif
 
     let state = NuraDeviceState()
     let provisioning = NuraProvisioningManager()
@@ -47,13 +68,32 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         // is reached via IOBluetooth RFCOMM. iOS can't do RFCOMM to non-MFi
         // devices, so it falls back to BLE.
         #if os(macOS)
-        self.transport = ClassicBTTransport()
+        let savedTransport = UserDefaults.standard.string(forKey: "macBluetoothTransport")
+            .flatMap(MacBluetoothTransport.init(rawValue:)) ?? .rfcomm
+        self.macBluetoothTransport = savedTransport
+        self.transport = savedTransport == .btle ? BLETransport() : ClassicBTTransport()
         #else
         self.transport = BLETransport()
         #endif
         super.init()
         self.transport.delegate = self
     }
+
+    #if os(macOS)
+    private func replaceTransportForMac() {
+        // The picker is disabled during an active connection. Still guard here
+        // so a programmatic change cannot replace a live transport.
+        guard phase.isIdle else { return }
+        transport.stopScan()
+        transport.delegate = nil
+        transport.disconnect()
+        transport = macBluetoothTransport == .btle
+            ? BLETransport()
+            : ClassicBTTransport()
+        transport.delegate = self
+        addLog("Bluetooth transport: \(macBluetoothTransport.rawValue)")
+    }
+    #endif
 
     // MARK: - Provisioning (recover device key from the Nura backend)
 
@@ -72,8 +112,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         gaiaCommandBusy = false
         nuraKey = []
         state.reset()
+        connectedDeviceName = "Nura device"
         phase = .scanning
-        addLog("Provisioning: scanning for nuraphone (make sure they're on and worn)...")
+        addLog("Provisioning: scanning for a Nura device (make sure it's on and worn)...")
         transport.autoResetOnConnect = autoDisconnectAudio
         transport.scan()
     }
@@ -122,7 +163,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
                     key,
                     serial: serial,
                     firmwareVersion: firmware,
-                    maxPacketLength: maxPacket
+                    maxPacketLength: maxPacket,
+                    friendlyName: connectedDeviceName,
+                    deviceType: deviceTypeName(forSerial: serial)
                 )
                 recoveredDeviceSerial = String(serial)
                 addLog("Provisioning: device key recovered and saved for serial \(serial)")
@@ -151,9 +194,10 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         gaiaCommandBusy = false
         nuraKey = []
         state.reset()
+        connectedDeviceName = "Nura device"
         phase = .scanning
         addLog("OpenNura \(AppInfo.displayVersion)")
-        addLog("Scanning for nuraphone...")
+        addLog("Scanning for a Nura device...")
         transport.autoResetOnConnect = autoDisconnectAudio
         transport.scan()
     }
@@ -166,6 +210,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         session = nil
         gaiaCommandBusy = false
         state.reset()
+        connectedDeviceName = "Nura device"
         phase = .idle
         addLog("Disconnected")
     }
@@ -475,6 +520,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
             self.addLog("  device info: \(hexStr(Data(p)))")
             self.state.deviceInfo = info
+            self.persistConnectedDeviceIdentity(serial: info.serialNumber)
             self.addLog("  serial=\(info.serialNumber) fw=\(info.firmwareVersion)")
             if self.mode == .provision {
                 self.runProvisioningRelay(serial: info.serialNumber, firmware: info.firmwareVersion)
@@ -506,6 +552,25 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         nuraKey = keyBytes
         addLog("  using configured key for serial \(serial)")
         return true
+    }
+
+    private func deviceTypeName(forSerial serial: Int) -> String {
+        switch serial {
+        case 0..<20_000_000: return "Nuraphone"
+        case 20_000_000..<30_000_000: return "NuraLoop"
+        case 70_000_000..<90_000_000: return "NuraTrue Pro"
+        default: return "Nura device"
+        }
+    }
+
+    private func persistConnectedDeviceIdentity(serial: Int) {
+        var config = configStore.load()
+        let serialString = String(serial)
+        guard var entry = config.deviceBySerial(serialString) else { return }
+        entry.friendlyName = connectedDeviceName
+        entry.type = deviceTypeName(forSerial: serial)
+        config.upsertDevice(entry)
+        configStore.save(config)
     }
 
     private func runHandshake() {
@@ -852,6 +917,11 @@ final class NuraDeviceManager: NSObject, ObservableObject {
 // MARK: - NuraTransportDelegate
 
 extension NuraDeviceManager: NuraTransportDelegate {
+    func transportDidSelectDevice(named name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        connectedDeviceName = trimmed.isEmpty ? "Nura device" : trimmed
+    }
+
     func transportDidUpdatePhase(_ newPhase: ConnectionPhase) {
         switch newPhase {
         case .handshaking:

@@ -146,7 +146,7 @@ struct DeviceKeysView: View {
                             .fill(Color.accentColor.opacity(0.15)))
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(hasName ? entry.friendlyName : "Nuraphone")
+                        Text(hasName ? entry.friendlyName : entry.type)
                             .font(.headline)
                         Text("Serial \(entry.deviceSerial)")
                             .font(.subheadline)

@@ -263,6 +263,7 @@
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenNura;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "OpenNura needs Bluetooth to communicate with your nuraphone.";
 				INFOPLIST_KEY_NSBluetoothWhileInUseUsageDescription = "OpenNura needs Bluetooth to communicate with your nuraphone.";
@@ -325,6 +326,7 @@
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenNura;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "OpenNura needs Bluetooth to communicate with your nuraphone.";
 				INFOPLIST_KEY_NSBluetoothWhileInUseUsageDescription = "OpenNura needs Bluetooth to communicate with your nuraphone.";

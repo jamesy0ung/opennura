@@ -49,8 +49,22 @@ final class BLETransport: NSObject, NuraTransport {
         // often doesn't advertise over BLE, so a scan never finds it. Ask the
         // system for already-connected peripherals exposing the GAIA service
         // first, and only fall back to scanning.
-        let connected = central.retrieveConnectedPeripherals(withServices: [gaiaServiceUUID])
+        // CoreBluetooth does not always associate an existing NuraLoop link
+        // with its vendor-specific GAIA service. It does expose the same
+        // peripheral through standard services, so also retrieve by Device
+        // Information and Battery, then require a Nura product name for those
+        // fallback results.
+        let gaiaConnected = central.retrieveConnectedPeripherals(withServices: [gaiaServiceUUID])
+        let standardServiceUUIDs = [CBUUID(string: "180A"), CBUUID(string: "180F")]
+        let namedConnected = standardServiceUUIDs
+            .flatMap { central.retrieveConnectedPeripherals(withServices: [$0]) }
+            .filter { ($0.name ?? "").lowercased().contains("nura") }
+        var seenIdentifiers = Set<UUID>()
+        let connected = (gaiaConnected + namedConnected).filter {
+            seenIdentifiers.insert($0.identifier).inserted
+        }
         if let p = connected.first {
+            delegate?.transportDidSelectDevice(named: p.name ?? "Nura device")
             delegate?.transportDidLog("BLE: Using already-connected \"\(p.name ?? "<no name>")\"")
             phase = .connecting
             peripheral = p
@@ -65,7 +79,11 @@ final class BLETransport: NSObject, NuraTransport {
             return
         }
 
-        delegate?.transportDidLog("BLE: Scanning for nuraphone...")
+        beginScanning()
+    }
+
+    private func beginScanning() {
+        delegate?.transportDidLog("BLE: Scanning for Nura device...")
         central.scanForPeripherals(
             withServices: nil,
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
@@ -243,7 +261,9 @@ extension BLETransport: CBCentralManagerDelegate {
             ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
             ?? "<no name>"
         let advertisedServices = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID]) ?? []
-        var match = name.lowercased().contains("nuraphone")
+        // Match the Nura product family (Nuraphone, NuraLoop, etc.). The
+        // device-info exchange remains the safety gate before authentication.
+        var match = name.lowercased().contains("nura")
         if !match {
             // Any device advertising the Qualcomm GAIA service is a candidate,
             // regardless of the name it broadcasts.
@@ -271,6 +291,7 @@ extension BLETransport: CBCentralManagerDelegate {
         MainActor.assumeIsolated {
             guard self.peripheral == nil else { return }
             central.stopScan()
+            delegate?.transportDidSelectDevice(named: name)
             delegate?.transportDidLog("Found \"\(name)\" - connecting")
             phase = .connecting
             self.peripheral = peripheral

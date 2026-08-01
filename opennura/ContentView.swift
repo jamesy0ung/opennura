@@ -122,7 +122,7 @@ struct ControlTab: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("nuraphone")
+                    Text(device.connectedDeviceName)
                         .font(.title2.weight(.bold))
                     StatusBadge(phase: device.phase)
                 }
@@ -138,13 +138,25 @@ struct ControlTab: View {
                             .buttonStyle(.bordered)
                     }
                     #if os(macOS)
-                    Toggle(isOn: $device.autoDisconnectAudio) {
-                        Text("Auto-disconnect audio")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    Picker("Transport", selection: $device.macBluetoothTransport) {
+                        ForEach(MacBluetoothTransport.allCases) { transport in
+                            Text(transport.rawValue).tag(transport)
+                        }
                     }
-                    .toggleStyle(.switch)
+                    .pickerStyle(.segmented)
                     .controlSize(.mini)
+                    .frame(width: 150)
+                    .disabled(!device.phase.isIdle)
+
+                    if device.macBluetoothTransport == .rfcomm {
+                        Toggle(isOn: $device.autoDisconnectAudio) {
+                            Text("Auto-disconnect audio")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                    }
                     #endif
                 }
             }
