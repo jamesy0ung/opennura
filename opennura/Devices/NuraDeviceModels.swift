@@ -17,6 +17,49 @@ enum NuraAncMode: String, CaseIterable {
     case passthrough = "Passthrough"
 }
 
+// MARK: - Device family
+
+/// Which physical product a connected device is, inferred from its serial
+/// number range. `nuraTrueFamily` is a catch-all for NuraTrue/NuraBuds/Sport/
+/// Denon PerL - no evidence for narrower sub-ranges, so it isn't split further.
+enum NuraDeviceFamily: String, CaseIterable {
+    case nuraphone
+    case nuraLoop
+    case nuraTruePro
+    case nuraTrueFamily
+    case unknown
+
+    static func forSerial(_ serial: Int?) -> NuraDeviceFamily {
+        guard let serial else { return .unknown }
+        switch serial {
+        case 0..<20_000_000: return .nuraphone
+        case 20_000_000..<30_000_000: return .nuraLoop
+        case 70_000_000..<90_000_000: return .nuraTruePro
+        case 30_000_000...: return .nuraTrueFamily
+        default: return .unknown
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .nuraphone: return "Nuraphone"
+        case .nuraLoop: return "NuraLoop"
+        case .nuraTruePro: return "NuraTrue Pro"
+        case .nuraTrueFamily: return "NuraTrue"
+        case .unknown: return "Nura device"
+        }
+    }
+
+    /// Nuraphone uses a boolean anc/social pair; every device since uses a
+    /// 0...6 level continuum instead.
+    var usesAncLevel: Bool {
+        switch self {
+        case .nuraLoop, .nuraTruePro, .nuraTrueFamily: return true
+        case .nuraphone, .unknown: return false
+        }
+    }
+}
+
 // MARK: - Battery
 
 struct NuraBatteryStatus: Equatable {
@@ -118,6 +161,53 @@ enum NuraButtonFunction: UInt8, CaseIterable, Identifiable {
 
     static func fromRawByte(_ value: UInt8) -> NuraButtonFunction {
         NuraButtonFunction(rawValue: value) ?? .none
+    }
+}
+
+// MARK: - Button capabilities (per device family)
+
+/// Which gestures and functions a device family supports.
+struct NuraButtonCapabilities {
+    var supportsDoubleTap: Bool
+    var supportsTripleTap: Bool
+    var offeredFunctions: [NuraButtonFunction]
+
+    /// The Nuraphone-curated set; other families without confirmed firmware
+    /// versioning fall back to it too rather than guess.
+    private static let baseline = NuraButtonCapabilities(
+        supportsDoubleTap: true,
+        supportsTripleTap: false,
+        offeredFunctions: [
+            .none,
+            .playPauseOnly,
+            .playPauseAndCall,
+            .previousTrack,
+            .nextTrack,
+            .volumeUp,
+            .volumeDown,
+            .toggleSocial,
+            .toggleAnc,
+            .togglePassthroughOnOneSide,
+            .togglePassthroughOnBothSides,
+            .toggleKickIt,
+        ]
+    )
+
+    static func `for`(_ family: NuraDeviceFamily) -> NuraButtonCapabilities {
+        switch family {
+        case .nuraphone, .unknown, .nuraLoop:
+            return baseline
+        case .nuraTrueFamily:
+            var caps = baseline
+            caps.supportsTripleTap = true
+            caps.offeredFunctions.append(.voiceAssistant)
+            return caps
+        case .nuraTruePro:
+            var caps = baseline
+            caps.supportsTripleTap = true
+            caps.offeredFunctions.append(contentsOf: [.voiceAssistant, .toggleSpatial])
+            return caps
+        }
     }
 }
 

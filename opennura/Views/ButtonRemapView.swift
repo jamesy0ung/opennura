@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Remaps the Nuraphone's touch-button gestures. Device reads/writes only happen
-/// when the user explicitly taps, never automatically. Tap-and-hold is not
-/// supported on the Nuraphone, so only single and double tap are offered.
+/// Remaps the connected device's touch-button gestures, scoped per device
+/// family (see `NuraButtonCapabilities`). Device reads/writes only happen
+/// when the user explicitly taps, never automatically.
 struct ButtonRemapView: View {
     @ObservedObject var device: NuraDeviceManager
     @Environment(\.dismiss) private var dismiss
@@ -11,7 +11,13 @@ struct ButtonRemapView: View {
     @State private var rightSingle: NuraButtonFunction = .none
     @State private var leftDouble: NuraButtonFunction = .none
     @State private var rightDouble: NuraButtonFunction = .none
+    @State private var leftTriple: NuraButtonFunction = .none
+    @State private var rightTriple: NuraButtonFunction = .none
     @State private var loaded = false
+
+    private var capabilities: NuraButtonCapabilities {
+        NuraButtonCapabilities.for(device.family)
+    }
 
     var body: some View {
         NavigationStack {
@@ -47,10 +53,19 @@ struct ButtonRemapView: View {
                             Divider()
                             gestureRow("Right", $rightSingle)
                         }
-                        Card("Double tap", systemImage: "hand.tap.fill", accent: .blue) {
-                            gestureRow("Left", $leftDouble)
-                            Divider()
-                            gestureRow("Right", $rightDouble)
+                        if capabilities.supportsDoubleTap {
+                            Card("Double tap", systemImage: "hand.tap.fill", accent: .blue) {
+                                gestureRow("Left", $leftDouble)
+                                Divider()
+                                gestureRow("Right", $rightDouble)
+                            }
+                        }
+                        if capabilities.supportsTripleTap {
+                            Card("Triple tap", systemImage: "hand.tap.fill", accent: .purple) {
+                                gestureRow("Left", $leftTriple)
+                                Divider()
+                                gestureRow("Right", $rightTriple)
+                            }
                         }
                     } else {
                         Card {
@@ -78,25 +93,8 @@ struct ButtonRemapView: View {
         .onAppear { applyFromDevice() }
     }
 
-    /// Functions offered in the picker, curated to what the Nuraphone actually
-    /// supports (cross-checked against NuraLib's per-model capability map).
-    /// Excluded on the Nuraphone: Immersion Up/Down (never honoured), voice
-    /// assistant, spatial, and niche functions this model doesn't expose.
     private var offeredFunctions: [NuraButtonFunction] {
-        [
-            .none,
-            .playPauseOnly,
-            .playPauseAndCall,
-            .previousTrack,
-            .nextTrack,
-            .volumeUp,
-            .volumeDown,
-            .toggleSocial,
-            .toggleAnc,
-            .togglePassthroughOnOneSide,
-            .togglePassthroughOnBothSides,
-            .toggleKickIt,
-        ]
+        capabilities.offeredFunctions
     }
 
     private func gestureRow(_ side: String, _ selection: Binding<NuraButtonFunction>) -> some View {
@@ -126,18 +124,23 @@ struct ButtonRemapView: View {
         rightSingle = c.rightSingleTap
         leftDouble = c.leftDoubleTap ?? .none
         rightDouble = c.rightDoubleTap ?? .none
+        leftTriple = c.leftTripleTap ?? .none
+        rightTriple = c.rightTripleTap ?? .none
         loaded = true
     }
 
     private func apply() {
-        // Tap-and-hold is unsupported on the Nuraphone, so those slots stay none.
+        // Tap-and-hold isn't exposed by this view on any device family yet, so
+        // those slots stay none. Triple tap only applies where supported.
         let config = NuraButtonConfiguration(
             leftSingleTap: leftSingle,
             rightSingleTap: rightSingle,
             leftDoubleTap: leftDouble,
             rightDoubleTap: rightDouble,
             leftTapAndHold: NuraButtonFunction.none,
-            rightTapAndHold: NuraButtonFunction.none
+            rightTapAndHold: NuraButtonFunction.none,
+            leftTripleTap: capabilities.supportsTripleTap ? leftTriple : nil,
+            rightTripleTap: capabilities.supportsTripleTap ? rightTriple : nil
         )
         device.setButtonConfiguration(config)
         dismiss()

@@ -71,17 +71,50 @@ struct MenuBarView: View {
 
     // MARK: Rows
 
+    @ViewBuilder
     private var noiseRow: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Noise").font(.caption).foregroundStyle(.secondary)
-            Picker("Noise", selection: Binding(
-                get: { device.state.anc?.mode ?? .off },
-                set: { device.setAncMode($0) }
-            )) {
-                ForEach(NuraAncMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        if device.family.usesAncLevel {
+            ancLevelRow
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Noise").font(.caption).foregroundStyle(.secondary)
+                Picker("Noise", selection: Binding(
+                    get: { device.state.anc?.mode ?? .off },
+                    set: { device.setAncMode($0) }
+                )) {
+                    ForEach(NuraAncMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+        }
+    }
+
+    private var ancLevelRow: some View {
+        HStack {
+            Text("Noise").font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            let level = device.state.ancLevel ?? 6
+            Button {
+                device.setAncLevel(max(0, level - 1))
+            } label: { Image(systemName: "minus.circle") }
+                .buttonStyle(.borderless)
+            Text(ancLevelLabel(level))
+                .font(.callout.monospacedDigit())
+                .frame(minWidth: 66)
+                .multilineTextAlignment(.center)
+            Button {
+                device.setAncLevel(min(6, level + 1))
+            } label: { Image(systemName: "plus.circle") }
+                .buttonStyle(.borderless)
+        }
+    }
+
+    private func ancLevelLabel(_ level: Int) -> String {
+        switch level {
+        case 0: return "Social"
+        case 6: return "ANC"
+        default: return "\(level)"
         }
     }
 

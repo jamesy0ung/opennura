@@ -209,18 +209,26 @@ struct ControlTab: View {
 
     // MARK: Noise control
 
+    @ViewBuilder
     private var noiseCard: some View {
         Card("Noise control", systemImage: "ear", accent: .blue) {
-            Picker("Noise mode", selection: Binding(
-                get: { device.state.anc?.mode ?? .off },
-                set: { newValue in device.setAncMode(newValue) }
-            )) {
-                ForEach(NuraAncMode.allCases, id: \.self) { mode in
-                    Text(mode.rawValue).tag(mode)
+            if device.family.usesAncLevel {
+                AncLevelSlider(
+                    current: device.state.ancLevel,
+                    onSelect: { device.setAncLevel($0) }
+                )
+            } else {
+                Picker("Noise mode", selection: Binding(
+                    get: { device.state.anc?.mode ?? .off },
+                    set: { newValue in device.setAncMode(newValue) }
+                )) {
+                    ForEach(NuraAncMode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
         }
     }
 
@@ -228,9 +236,11 @@ struct ControlTab: View {
 
     private var immersionCard: some View {
         Card("Immersion", systemImage: "waveform.path", accent: .orange) {
-            ImmersionSlider(current: device.state.immersionLevel) {
-                device.setImmersion($0)
-            }
+            ImmersionSlider(
+                current: device.state.immersionLevel,
+                onSelect: { device.setImmersion($0) },
+                range: device.family == .nuraTruePro ? -3...3 : -2...4
+            )
         }
     }
 

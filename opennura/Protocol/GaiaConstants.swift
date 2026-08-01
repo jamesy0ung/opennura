@@ -61,6 +61,23 @@ let cmdSetButtonConfigV1: UInt16 = 0x00B6
 let cmdGetButtonConfigV1: UInt16 = 0x00B7
 let cmdGetVisualisationData: UInt16 = 0x00B8
 
+// MARK: - NuraTrue Pro / Denon PerL Pro inner opcodes
+//
+// Same handshake and encrypted command/response wrapper as the legacy GAIA
+// opcodes above, but different inner command IDs and payload shapes.
+// Reverse engineered from a packet capture of the real Denon app against a
+// Denon PerL Pro.
+let cmdProSetPersonalisedMode: UInt16 = 0x000C
+/// [profileId, level]. A single 0...6 continuum (6 = full ANC, 0 = full
+/// transparency) rather than the legacy anc/social boolean pair.
+let cmdProSetAncLevel: UInt16 = 0x0101
+/// [profileId, enabled]. Master on/off, independent of the level above.
+let cmdProSetGlobalAncEnabled: UInt16 = 0x011A
+/// [profileId, level + 3, 0x01]. Range is -3...+3, not the classic -2...+4.
+let cmdProSetImmersion: UInt16 = 0x011D
+/// [profileId, enabled] - has a profileId prefix, unlike cmdSetSpatialState.
+let cmdProSetSpatialState: UInt16 = 0x017B
+
 // MARK: - Known-device BD address suffixes for BLE matching
 
 let nuraphoneBdAddrSuffix: [UInt8] = [
