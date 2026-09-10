@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - BLE UUIDs
 
-let gaiaServiceUUID = CBUUID(
+nonisolated let gaiaServiceUUID = CBUUID(
     string: "00001100-D102-11E1-9B23-00025B00A5A5"
 )
 let gaiaCommandUUID = CBUUID(
@@ -80,11 +80,11 @@ let cmdProSetSpatialState: UInt16 = 0x017B
 
 // MARK: - Known-device BD address suffixes for BLE matching
 
-let nuraphoneBdAddrSuffix: [UInt8] = [
+nonisolated let nuraphoneBdAddrSuffix: [UInt8] = [
     0x74, 0x1a, 0xe0, 0x21, 0x07, 0x86,
 ]
 
-let denonPerlProBdAddrSuffix: [UInt8] = [
+nonisolated let denonPerlProBdAddrSuffix: [UInt8] = [
     0x8c, 0xa9, 0x6f, 0x1f, 0x80, 0x0e,
 ]
 
