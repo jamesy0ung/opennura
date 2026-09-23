@@ -6,7 +6,7 @@ import Foundation
 /// secrets are migrated into the Keychain on load and then stripped from disk.
 final class NuraConfigStore {
     private let fileURL: URL
-
+    
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let bundleID = Bundle.main.bundleIdentifier ?? "opennura"
@@ -20,7 +20,7 @@ final class NuraConfigStore {
         try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
         fileURL = dir.appendingPathComponent("config.json")
     }
-
+    
     func load() -> NuraConfig {
         guard let data = try? Data(contentsOf: fileURL) else {
             // No file yet: still surface any secrets already in the Keychain.
@@ -34,14 +34,14 @@ final class NuraConfigStore {
         } catch {
             config = NuraConfig()
         }
-
+        
         // Detect whether the on-disk file still carries plaintext secrets
         // (a legacy file, or one written before this version).
         let fileHadAuthSecret = config.auth?.hasAuthenticatedSession == true
         let fileHadDeviceKey = config.devices.contains { !$0.deviceKey.isEmpty }
-
+        
         overlaySecrets(into: &config)
-
+        
         // If the file held secrets, migrate them into the Keychain and rewrite
         // the file without them. save() only strips a secret from disk once it
         // has been verified in the Keychain, so a Keychain failure never loses
@@ -51,7 +51,7 @@ final class NuraConfigStore {
         }
         return config
     }
-
+    
     /// Fills in secret fields from the Keychain where present, leaving any
     /// value already in `config` (i.e. from a legacy file) untouched otherwise.
     private func overlaySecrets(into config: inout NuraConfig) {
@@ -67,10 +67,10 @@ final class NuraConfigStore {
             }
         }
     }
-
+    
     func save(_ config: NuraConfig) {
         var onDisk = config
-
+        
         // Move the auth tokens into the Keychain; only drop them from the file
         // once the Keychain write is verified.
         if let auth = config.auth,
@@ -81,7 +81,7 @@ final class NuraConfigStore {
                 onDisk.auth = nil
             }
         }
-
+        
         // Same for each device key.
         onDisk.devices = config.devices.map { entry in
             var stripped = entry
@@ -94,7 +94,7 @@ final class NuraConfigStore {
             }
             return stripped
         }
-
+        
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {
@@ -110,7 +110,7 @@ final class NuraConfigStore {
             // Config save is best-effort.
         }
     }
-
+    
     /// Removes a device's key from the Keychain (used when a device is deleted).
     func forgetDeviceKey(serial: String) {
         NuraKeychain.delete(NuraKeychain.deviceKeyAccount(serial: serial))

@@ -19,11 +19,11 @@ final class NuraDeviceState: ObservableObject {
     /// Hearing-profile visualisation data, keyed by profile id. Populated only
     /// when the user explicitly asks to view a profile's shape.
     @Published var visualisations: [Int: NuraProfileVisualisation] = [:]
-
+    
     var ancEnabled: Bool { anc?.ancEnabled ?? false }
     var passthroughEnabled: Bool { anc?.passthroughEnabled ?? false }
     var batteryPercentage: Int? { battery?.batteryPercentage }
-
+    
     func reset() {
         deviceInfo = nil
         anc = nil

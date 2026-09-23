@@ -5,9 +5,9 @@ import SwiftUI
 struct ProfileCompareView: View {
     @ObservedObject var device: NuraDeviceManager
     @Environment(\.dismiss) private var dismiss
-
+    
     private let palette: [Color] = [.purple, .teal, .orange]
-
+    
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -27,7 +27,7 @@ struct ProfileCompareView: View {
                             .controlSize(.large)
                         }
                     }
-
+                    
                     if populatedLoaded.isEmpty {
                         Card {
                             Text("Tap Reload all to fetch each profile's shape.")
@@ -48,11 +48,11 @@ struct ProfileCompareView: View {
             }
             .onAppear { device.refreshAllVisualisations() }
         }
-        #if os(macOS)
+#if os(macOS)
         .frame(minWidth: 480, minHeight: 560)
-        #endif
+#endif
     }
-
+    
     private var comparisonCard: some View {
         Card("Comparison", systemImage: "waveform.path.ecg", accent: .indigo) {
             VStack(spacing: 14) {
@@ -62,18 +62,18 @@ struct ProfileCompareView: View {
             }
         }
     }
-
+    
     private var populatedLoaded: [(id: Int, vis: NuraProfileVisualisation)] {
         [0, 1, 2].compactMap { id in
             guard device.isProfilePopulated(id),
                   let v = device.state.visualisations[id], !v.isEmpty
-            else { return nil }
+                    else { return nil }
             return (id, v)
         }
     }
-
+    
     private func color(for id: Int) -> Color { palette[id % palette.count] }
-
+    
     private func legend(_ loaded: [(id: Int, vis: NuraProfileVisualisation)]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(loaded, id: \.id) { item in
@@ -89,7 +89,7 @@ struct ProfileCompareView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-
+    
     private func draw(_ loaded: [(id: Int, vis: NuraProfileVisualisation)],
                       in ctx: inout GraphicsContext, size: CGSize) {
         let all = loaded.flatMap { $0.vis.combined }
@@ -99,13 +99,13 @@ struct ProfileCompareView: View {
         let span = max(maxV - minV, 0.0001)
         let insetY: CGFloat = 16
         let plotH = size.height - insetY * 2
-
+        
         var midline = Path()
         midline.move(to: CGPoint(x: 0, y: size.height / 2))
         midline.addLine(to: CGPoint(x: size.width, y: size.height / 2))
         ctx.stroke(midline, with: .color(.secondary.opacity(0.15)),
                    style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-
+        
         for item in loaded {
             let values = item.vis.combined
             guard values.count >= 2 else { continue }
@@ -122,7 +122,7 @@ struct ProfileCompareView: View {
             }
         }
     }
-
+    
     private func smoothPath(_ points: [CGPoint]) -> Path {
         var path = Path()
         guard let first = points.first else { return path }

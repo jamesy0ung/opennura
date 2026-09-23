@@ -42,7 +42,7 @@ let aesRcon: [UInt8] = [
 
 struct AES128 {
     private let roundKeys: [[UInt8]]
-
+    
     init(key: [UInt8]) {
         var w = [[UInt8]](repeating: [0, 0, 0, 0], count: 44)
         for i in 0..<4 {
@@ -68,7 +68,7 @@ struct AES128 {
         }
         roundKeys = rks
     }
-
+    
     func encryptBlock(_ input: [UInt8]) -> [UInt8] {
         var s = input
         for i in 0..<16 { s[i] ^= roundKeys[0][i] }
@@ -83,7 +83,7 @@ struct AES128 {
         for i in 0..<16 { s[i] ^= roundKeys[10][i] }
         return s
     }
-
+    
     private static func gmul(_ a: UInt8, _ b: UInt8) -> UInt8 {
         var a = a
         var b = b

@@ -12,11 +12,11 @@ enum NuraMsg {
     static func asMap(_ value: Any?) -> [String: Any?]? {
         value as? [String: Any?]
     }
-
+    
     static func asArray(_ value: Any?) -> [Any?]? {
         value as? [Any?]
     }
-
+    
     /// Case-insensitive lookup within a map.
     static func value(_ map: [String: Any?]?, _ key: String) -> Any? {
         guard let map else { return nil }
@@ -26,7 +26,7 @@ enum NuraMsg {
         }
         return nil
     }
-
+    
     static func intValue(_ value: Any?) -> Int? {
         switch value {
         case let i as Int: return i
@@ -38,7 +38,7 @@ enum NuraMsg {
         default: return nil
         }
     }
-
+    
     static func boolValue(_ value: Any?) -> Bool? {
         switch value {
         case let b as Bool: return b
@@ -46,7 +46,7 @@ enum NuraMsg {
         default: return nil
         }
     }
-
+    
     /// Mirrors NuraLib's ConvertToStringValue: strings pass through, and binary
     /// values are base64-encoded (this is how app_enc.key arrives).
     static func stringValue(_ value: Any?) -> String? {
@@ -57,7 +57,7 @@ enum NuraMsg {
         default: return nil
         }
     }
-
+    
     /// Returns bytes for a payload node, decoding base64 strings when needed.
     static func bytesValue(_ value: Any?) -> [UInt8]? {
         switch value {
@@ -79,37 +79,37 @@ struct NuraAuthSnapshot {
 }
 
 enum NuraAuthResponseParser {
-
+    
     /// Extracts the session-relevant fields from a decoded response body.
     static func extract(_ body: [String: Any?]?) -> NuraAuthSnapshot {
         guard let body else { return NuraAuthSnapshot() }
         var snap = NuraAuthSnapshot()
-
+        
         snap.userSessionId =
-            NuraMsg.intValue(NuraMsg.value(typedActionDetail(body, "user_session_status"), "id")) ??
-            findIntInPayload(body, keys: ["user_session_id", "userSessionId", "sessionId", "usid"])
-
+        NuraMsg.intValue(NuraMsg.value(typedActionDetail(body, "user_session_status"), "id")) ??
+        findIntInPayload(body, keys: ["user_session_id", "userSessionId", "sessionId", "usid"])
+        
         snap.appSessionId =
-            NuraMsg.intValue(NuraMsg.value(typedActionDetail(body, "app_session_status"), "id")) ??
-            findIntInPayload(body, keys: ["app_session_id", "appSessionId", "asid"])
-
+        NuraMsg.intValue(NuraMsg.value(typedActionDetail(body, "app_session_status"), "id")) ??
+        findIntInPayload(body, keys: ["app_session_id", "appSessionId", "asid"])
+        
         snap.appEncKey =
-            NuraMsg.stringValue(NuraMsg.value(typedActionDetail(body, "app_enc"), "key")) ??
-            findStringInPayload(body, keys: ["app_enc_key", "appEncKey"])
-
+        NuraMsg.stringValue(NuraMsg.value(typedActionDetail(body, "app_enc"), "key")) ??
+        findStringInPayload(body, keys: ["app_enc_key", "appEncKey"])
+        
         snap.appEncNonce =
-            NuraMsg.stringValue(NuraMsg.value(typedActionDetail(body, "app_enc"), "nonce")) ??
-            findStringInPayload(body, keys: ["app_enc_nonce", "appEncNonce"])
-
+        NuraMsg.stringValue(NuraMsg.value(typedActionDetail(body, "app_enc"), "nonce")) ??
+        findStringInPayload(body, keys: ["app_enc_nonce", "appEncNonce"])
+        
         return snap
     }
-
+    
     /// Finds the detail map ("d") of a typed action { t:"t", c:<category> } inside body.d.a[].
     private static func typedActionDetail(_ body: [String: Any?], _ category: String) -> [String: Any?]? {
         guard let dataMap = NuraMsg.asMap(NuraMsg.value(body, "d")),
               let actions = NuraMsg.asArray(NuraMsg.value(dataMap, "a"))
-        else { return nil }
-
+                else { return nil }
+        
         for action in actions {
             guard let actionMap = NuraMsg.asMap(action) else { continue }
             let type = NuraMsg.stringValue(NuraMsg.value(actionMap, "t"))
@@ -121,7 +121,7 @@ enum NuraAuthResponseParser {
         }
         return nil
     }
-
+    
     private static func payloadMaps(_ body: [String: Any?]) -> [[String: Any?]] {
         var maps: [[String: Any?]] = [body]
         if let dataMap = NuraMsg.asMap(NuraMsg.value(body, "d")) {
@@ -129,7 +129,7 @@ enum NuraAuthResponseParser {
         }
         return maps
     }
-
+    
     private static func findIntInPayload(_ body: [String: Any?], keys: [String]) -> Int? {
         for map in payloadMaps(body) {
             for key in keys {
@@ -138,7 +138,7 @@ enum NuraAuthResponseParser {
         }
         return nil
     }
-
+    
     private static func findStringInPayload(_ body: [String: Any?], keys: [String]) -> String? {
         for map in payloadMaps(body) {
             for key in keys {
@@ -166,10 +166,10 @@ struct NuraSessionStartDetails {
 }
 
 enum NuraSessionStartResponseParser {
-
+    
     static func parse(_ body: [String: Any?]) -> NuraSessionStartDetails? {
         guard let dataMap = NuraMsg.asMap(NuraMsg.value(body, "d")) else { return nil }
-
+        
         var details = NuraSessionStartDetails()
         details.sessionId = intFromTypedAction(dataMap, category: "session")
         details.finalEvent = finalEvent(dataMap)
@@ -177,12 +177,12 @@ enum NuraSessionStartResponseParser {
         details.runPackets = packets(dataMap, actionType: "r")
         return details
     }
-
+    
     private static func actionMaps(_ dataMap: [String: Any?]) -> [[String: Any?]] {
         guard let actions = NuraMsg.asArray(NuraMsg.value(dataMap, "a")) else { return [] }
         return actions.compactMap { NuraMsg.asMap($0) }
     }
-
+    
     private static func intFromTypedAction(_ dataMap: [String: Any?], category: String) -> Int? {
         for action in actionMaps(dataMap) {
             let type = NuraMsg.stringValue(NuraMsg.value(action, "t"))
@@ -194,7 +194,7 @@ enum NuraSessionStartResponseParser {
         }
         return nil
     }
-
+    
     private static func finalEvent(_ dataMap: [String: Any?]) -> String? {
         for action in actionMaps(dataMap) {
             let type = NuraMsg.stringValue(NuraMsg.value(action, "t"))
@@ -206,7 +206,7 @@ enum NuraSessionStartResponseParser {
         }
         return nil
     }
-
+    
     private static func packets(_ dataMap: [String: Any?], actionType: String) -> [NuraSessionStartPacket] {
         var result: [NuraSessionStartPacket] = []
         for action in actionMaps(dataMap) {

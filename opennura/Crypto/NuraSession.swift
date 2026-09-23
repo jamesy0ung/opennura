@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Nura session counters (spec §4.3)
+// MARK: - Nura session counters
 
 let kyleAAD: [UInt8] = Array("Kyle is awesome!".utf8)
 
@@ -25,7 +25,7 @@ final class NuraSession {
         self.key = key
         self.nonce = nonce
     }
-
+    
     func decryptDevToApp(_ payload: [UInt8]) throws -> [UInt8] {
         guard payload.count >= 16 else {
             throw NuraError.malformed("dev->app payload too short")
@@ -43,7 +43,7 @@ final class NuraSession {
         decCtr = advanceCounter(decCtr, plainLen: pt.count)
         return pt
     }
-
+    
     func encryptAppToDev(_ plaintext: [UInt8]) -> (tag: [UInt8], ct: [UInt8]) {
         let j0 = makeJ0(nonce: nonce, counter: encCtr, deviceToApp: false)
         let (ct, tag) = gcmWithJ0(

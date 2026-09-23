@@ -2,7 +2,7 @@ import SwiftUI
 
 struct LogView: View {
     let logs: [String]
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -34,14 +34,14 @@ struct LogView: View {
             }
         }
     }
-
+    
     private func copyAll() {
         let text = logs.joined(separator: "\n")
-        #if os(macOS)
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
-        #else
-            UIPasteboard.general.string = text
-        #endif
+#if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+#else
+        UIPasteboard.general.string = text
+#endif
     }
 }

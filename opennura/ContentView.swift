@@ -54,6 +54,8 @@ struct ControlTab: View {
     @State private var renameTarget: Int?
     @State private var renameText = ""
     @State private var showRename = false
+    @State private var showDiscoverableConfirm = false
+    @State private var discoverableResult: String?
 
     var body: some View {
         ScrollView {
@@ -95,6 +97,27 @@ struct ControlTab: View {
         }
         .sheet(isPresented: $showCompare) {
             ProfileCompareView(device: device)
+        }
+        .alert("Enter discoverable mode?", isPresented: $showDiscoverableConfirm) {
+            Button("Enter discoverable") {
+                device.enterDiscoverableMode { result in
+                    switch result {
+                    case .success: discoverableResult = "The headphones are now discoverable for 2 minutes."
+                    case .failure(let e): discoverableResult = "Failed: \(e.localizedDescription)"
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The headphones will be visible to new Bluetooth devices for 120 seconds.")
+        }
+        .alert("Discoverable mode", isPresented: Binding(
+            get: { discoverableResult != nil },
+            set: { if !$0 { discoverableResult = nil } }
+        )) {
+            Button("OK") { discoverableResult = nil }
+        } message: {
+            Text(discoverableResult ?? "")
         }
         .alert("Rename profile", isPresented: $showRename) {
             TextField("Name", text: $renameText)
@@ -390,6 +413,15 @@ struct ControlTab: View {
                     infoRow("Serial", "\(info.serialNumber)")
                     Divider()
                     infoRow("Firmware", "\(info.firmwareVersion)")
+                    Divider()
+                    Button {
+                        showDiscoverableConfirm = true
+                    } label: {
+                        Label("Enter discoverable mode", systemImage: "antenna.radiowaves.left.and.right")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
                 }
             }
         }

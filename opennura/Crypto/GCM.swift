@@ -1,7 +1,5 @@
 import Foundation
 
-// MARK: - GCM (explicit J0, matches nura_crypto.py)
-
 struct U128 {
     var hi: UInt64
     var lo: UInt64
@@ -58,8 +56,8 @@ private func ghash(h: U128, data: [UInt8]) -> U128 {
 private func inc32(_ block: [UInt8]) -> [UInt8] {
     var out = block
     var ctr =
-        (UInt32(out[12]) << 24) | (UInt32(out[13]) << 16)
-        | (UInt32(out[14]) << 8) | UInt32(out[15])
+    (UInt32(out[12]) << 24) | (UInt32(out[13]) << 16)
+    | (UInt32(out[14]) << 8) | UInt32(out[15])
     ctr = ctr &+ 1
     out[12] = UInt8((ctr >> 24) & 0xFF)
     out[13] = UInt8((ctr >> 16) & 0xFF)

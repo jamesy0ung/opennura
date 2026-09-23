@@ -6,11 +6,11 @@ import SwiftUI
 /// opening the main window.
 struct MenuBarView: View {
     @ObservedObject var device: NuraDeviceManager
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
-
+            
             if device.phase.isReady {
                 Divider()
                 noiseRow
@@ -21,7 +21,7 @@ struct MenuBarView: View {
                 Divider()
                 notConnected
             }
-
+            
             Divider()
             HStack {
                 if let battery = device.state.battery {
@@ -38,9 +38,9 @@ struct MenuBarView: View {
         .padding(14)
         .frame(width: 300)
     }
-
+    
     // MARK: Header
-
+    
     private var header: some View {
         HStack(spacing: 10) {
             Image(systemName: "headphones")
@@ -62,15 +62,15 @@ struct MenuBarView: View {
             }
         }
     }
-
+    
     private var notConnected: some View {
         Text("Connect with the nuraphone paired but its audio disconnected in macOS. Then you can resume audio and use these controls.")
             .font(.caption)
             .foregroundStyle(.secondary)
     }
-
+    
     // MARK: Rows
-
+    
     @ViewBuilder
     private var noiseRow: some View {
         if device.family.usesAncLevel {
@@ -89,7 +89,7 @@ struct MenuBarView: View {
             }
         }
     }
-
+    
     private var ancLevelRow: some View {
         HStack {
             Text("Noise").font(.caption).foregroundStyle(.secondary)
@@ -109,7 +109,7 @@ struct MenuBarView: View {
                 .buttonStyle(.borderless)
         }
     }
-
+    
     private func ancLevelLabel(_ level: Int) -> String {
         switch level {
         case 0: return "Social"
@@ -117,7 +117,7 @@ struct MenuBarView: View {
         default: return "\(level)"
         }
     }
-
+    
     private var soundRow: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Sound").font(.caption).foregroundStyle(.secondary)
@@ -131,7 +131,7 @@ struct MenuBarView: View {
             .labelsHidden()
         }
     }
-
+    
     private var immersionRow: some View {
         HStack {
             Text("Immersion").font(.caption).foregroundStyle(.secondary)
@@ -150,7 +150,7 @@ struct MenuBarView: View {
                 .buttonStyle(.borderless)
         }
     }
-
+    
     private var profileRow: some View {
         HStack {
             Text("Profile").font(.caption).foregroundStyle(.secondary)
@@ -170,13 +170,13 @@ struct MenuBarView: View {
                 .buttonStyle(.borderless)
         }
     }
-
+    
     // MARK: Helpers
-
+    
     private var hasProfiles: Bool {
         [0, 1, 2].contains { device.isProfilePopulated($0) }
     }
-
+    
     private var immersionLabel: String {
         let level = device.state.immersionLevel
         let sign = level > 0 ? "+" : ""

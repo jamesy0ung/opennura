@@ -6,7 +6,7 @@ import Security
 /// app's service, accessible after first unlock and never synced to iCloud.
 enum NuraKeychain {
     private static let service = (Bundle.main.bundleIdentifier ?? "org.jamesyoung.opennura") + ".secrets"
-
+    
     /// Stores (or replaces) a string value for an account. Returns true on success.
     @discardableResult
     static func set(_ value: String, account: String) -> Bool {
@@ -22,7 +22,7 @@ enum NuraKeychain {
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
     }
-
+    
     /// Reads the string value for an account, or nil if absent.
     static func get(_ account: String) -> String? {
         let query: [String: Any] = [
@@ -36,10 +36,10 @@ enum NuraKeychain {
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
               let data = result as? Data,
               let string = String(data: data, encoding: .utf8)
-        else { return nil }
+                else { return nil }
         return string
     }
-
+    
     static func delete(_ account: String) {
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -48,9 +48,9 @@ enum NuraKeychain {
         ]
         SecItemDelete(base as CFDictionary)
     }
-
+    
     // MARK: - Account keys
-
+    
     static let authAccount = "auth"
     static func deviceKeyAccount(serial: String) -> String { "deviceKey.\(serial)" }
 }

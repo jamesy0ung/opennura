@@ -6,11 +6,11 @@ struct DeviceKeysView: View {
     @State private var editorTarget: EditorTarget?
     @State private var showImporter = false
     @State private var importError: String?
-    #if os(iOS)
+#if os(iOS)
     @State private var shareItem: ShareItem?
-    #endif
+#endif
     private let configStore = NuraConfigStore()
-
+    
     /// What the editor sheet is editing. Using an Identifiable item (rather than
     /// a separate isPresented flag) guarantees the sheet is built with the
     /// chosen entry on the first open, not a stale value.
@@ -24,12 +24,12 @@ struct DeviceKeysView: View {
             }
         }
     }
-
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
                 header
-
+                
                 if devices.isEmpty {
                     emptyCard
                 } else {
@@ -47,7 +47,7 @@ struct DeviceKeysView: View {
         .background(
             LinearGradient(colors: [Color.accentColor.opacity(0.10), Color.clear],
                            startPoint: .top, endPoint: .center)
-                .ignoresSafeArea()
+            .ignoresSafeArea()
         )
         .onAppear(perform: reload)
         .sheet(item: $editorTarget, onDismiss: reload) { target in
@@ -58,9 +58,9 @@ struct DeviceKeysView: View {
                 DeviceEntryEditor(entry: entry, onSave: save, onDelete: delete(serial:))
             }
         }
-        #if os(iOS)
+#if os(iOS)
         .sheet(item: $shareItem) { wrapped in ShareSheet(items: [wrapped.url]) }
-        #endif
+#endif
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
             importDevices(from: result)
         }
@@ -73,11 +73,11 @@ struct DeviceKeysView: View {
             Text(importError ?? "")
         }
     }
-
+    
     // MARK: - Pieces
-
+    
     private var header: some View {
-        #if os(iOS)
+#if os(iOS)
         HStack {
             Text(devices.isEmpty ? "Your saved device keys" : "\(devices.count) saved \(devices.count == 1 ? "device" : "devices")")
                 .font(.subheadline)
@@ -97,7 +97,7 @@ struct DeviceKeysView: View {
             }
             .buttonStyle(.borderedProminent)
         }
-        #else
+#else
         HStack {
             Text("Devices")
                 .font(.largeTitle.weight(.bold))
@@ -115,9 +115,9 @@ struct DeviceKeysView: View {
             }
             .buttonStyle(.borderedProminent)
         }
-        #endif
+#endif
     }
-
+    
     private var emptyCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
@@ -129,7 +129,7 @@ struct DeviceKeysView: View {
             }
         }
     }
-
+    
     private func deviceCard(_ entry: NuraDeviceConfigEntry) -> some View {
         let hasName = !entry.friendlyName.isEmpty
         let hasKey = entry.getDeviceKeyBytes() != nil
@@ -144,7 +144,7 @@ struct DeviceKeysView: View {
                         .frame(width: 44, height: 44)
                         .background(RoundedRectangle(cornerRadius: 11, style: .continuous)
                             .fill(Color.accentColor.opacity(0.15)))
-
+                    
                     VStack(alignment: .leading, spacing: 3) {
                         Text(hasName ? entry.friendlyName : entry.type)
                             .font(.headline)
@@ -153,10 +153,10 @@ struct DeviceKeysView: View {
                             .foregroundStyle(.secondary)
                         Label(hasKey ? "Key saved" : "No key",
                               systemImage: hasKey ? "lock.fill" : "lock.open")
-                            .font(.caption)
-                            .foregroundStyle(hasKey ? .green : .orange)
+                        .font(.caption)
+                        .foregroundStyle(hasKey ? .green : .orange)
                     }
-
+                    
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.callout.weight(.semibold))
@@ -165,28 +165,28 @@ struct DeviceKeysView: View {
             }
         }
         .buttonStyle(.plain)
-        #if os(iOS)
+#if os(iOS)
         .swipeActions(edge: .leading) {
             Button { export([entry]) } label: { Label("Share", systemImage: "square.and.arrow.up") }
                 .tint(.blue)
         }
-        #endif
+#endif
         .contextMenu {
-            #if os(iOS)
+#if os(iOS)
             Button { export([entry]) } label: { Label("Share", systemImage: "square.and.arrow.up") }
-            #endif
+#endif
             Button(role: .destructive) { delete(serial: entry.deviceSerial) } label: {
                 Label("Delete", systemImage: "trash")
             }
         }
     }
-
+    
     // MARK: - Data
-
+    
     private func reload() {
         devices = configStore.load().devices
     }
-
+    
     private func delete(serial: String) {
         var config = configStore.load()
         config.devices.removeAll { $0.deviceSerial == serial }
@@ -194,15 +194,15 @@ struct DeviceKeysView: View {
         configStore.forgetDeviceKey(serial: serial)
         reload()
     }
-
+    
     private func save(_ entry: NuraDeviceConfigEntry) {
         var config = configStore.load()
         config.upsertDevice(entry)
         configStore.save(config)
         reload()
     }
-
-    #if os(iOS)
+    
+#if os(iOS)
     private func export(_ entries: [NuraDeviceConfigEntry]) {
         do {
             let encoder = JSONEncoder()
@@ -216,8 +216,8 @@ struct DeviceKeysView: View {
             importError = "Could not export: \(error.localizedDescription)"
         }
     }
-    #endif
-
+#endif
+    
     private func importDevices(from result: Result<URL, Error>) {
         switch result {
         case .failure(let error):
@@ -263,14 +263,14 @@ private struct DeviceEntryEditor: View {
     let entry: NuraDeviceConfigEntry?
     let onSave: (NuraDeviceConfigEntry) -> Void
     let onDelete: (String) -> Void
-
+    
     @State private var friendlyName: String
     @State private var deviceSerial: String
     @State private var keyHex: String
     @State private var errorMessage: String?
     @State private var revealKey = false
     @State private var didCopy = false
-
+    
     init(entry: NuraDeviceConfigEntry?,
          onSave: @escaping (NuraDeviceConfigEntry) -> Void,
          onDelete: @escaping (String) -> Void) {
@@ -282,7 +282,7 @@ private struct DeviceEntryEditor: View {
         let keyBytes = entry?.getDeviceKeyBytes() ?? []
         _keyHex = State(initialValue: keyBytes.map { String(format: "%02x", $0) }.joined())
     }
-
+    
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -294,9 +294,9 @@ private struct DeviceEntryEditor: View {
                     field("Serial number") {
                         TextField("Numeric serial", text: $deviceSerial)
                             .textFieldStyle(.roundedBorder)
-                            #if !os(macOS)
+#if !os(macOS)
                             .keyboardType(.numberPad)
-                            #endif
+#endif
                     }
                     keyField
                     if let errorMessage {
@@ -322,18 +322,18 @@ private struct DeviceEntryEditor: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Save", action: trySave) }
             }
         }
-        #if os(macOS)
+#if os(macOS)
         .frame(minWidth: 460, minHeight: 420)
-        #endif
+#endif
     }
-
+    
     private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             content()
         }
     }
-
+    
     private var keyField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Device key").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -341,10 +341,10 @@ private struct DeviceEntryEditor: View {
                 TextField("32 hex characters", text: $keyHex)
                     .textFieldStyle(.roundedBorder)
                     .font(.footnote.monospaced())
-                    #if !os(macOS)
+#if !os(macOS)
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
-                    #endif
+#endif
             } else {
                 Text(keyHex.isEmpty ? "Not set" : maskedKey)
                     .font(.footnote.monospaced())
@@ -374,26 +374,26 @@ private struct DeviceEntryEditor: View {
                 .foregroundStyle(.secondary)
         }
     }
-
+    
     private var maskedKey: String {
         let clean = keyHex.trimmingCharacters(in: .whitespacesAndNewlines)
         guard clean.count >= 8 else { return String(repeating: "•", count: clean.count) }
         return "\(clean.prefix(4))••••••••••••••••••••••••\(clean.suffix(4))"
     }
-
+    
     private func copyKey() {
         let value = keyHex.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
-        #if os(macOS)
+#if os(macOS)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
-        #else
+#else
         UIPasteboard.general.string = value
-        #endif
+#endif
         didCopy = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { didCopy = false }
     }
-
+    
     private func trySave() {
         let serial = deviceSerial.trimmingCharacters(in: .whitespaces)
         guard !serial.isEmpty else { errorMessage = "Serial number is required"; return }

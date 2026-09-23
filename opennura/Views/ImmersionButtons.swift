@@ -5,7 +5,7 @@ struct ImmersionSlider: View {
     let onSelect: (Int) -> Void
     /// -2...4 on the classic Nuraphone; NuraTrue Pro's range is -3...+3.
     var range: ClosedRange<Int> = -2...4
-
+    
     var body: some View {
         VStack(spacing: 4) {
             Text(levelLabel(current))
@@ -32,7 +32,7 @@ struct ImmersionSlider: View {
             }
         }
     }
-
+    
     private func levelLabel(_ level: Int) -> String {
         if range == -2...4 {
             switch level {
@@ -51,7 +51,7 @@ struct ImmersionSlider: View {
         if level == 0 { return "Neutral" }
         return level > 0 ? "+\(level)" : "\(level)"
     }
-
+    
     private func levelColor(_ level: Int) -> Color {
         if level == 0 { return .gray }
         if level > 0 { return level >= range.upperBound - 1 ? .purple : .blue }

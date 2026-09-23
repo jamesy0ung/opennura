@@ -6,7 +6,7 @@ import SwiftUI
 struct AncLevelSlider: View {
     let current: Int?
     let onSelect: (Int) -> Void
-
+    
     var body: some View {
         VStack(spacing: 4) {
             if let current {
@@ -35,7 +35,7 @@ struct AncLevelSlider: View {
             }
         }
     }
-
+    
     private func levelGlyph(_ level: Int) -> String {
         switch level {
         case 0: return "Social"
@@ -43,7 +43,7 @@ struct AncLevelSlider: View {
         default: return "\(level)"
         }
     }
-
+    
     private func levelLabel(_ level: Int) -> String {
         switch level {
         case 0: return "Full Social"
@@ -51,7 +51,7 @@ struct AncLevelSlider: View {
         default: return "Level \(level)"
         }
     }
-
+    
     private func levelColor(_ level: Int) -> Color {
         switch level {
         case 0, 1: return .orange

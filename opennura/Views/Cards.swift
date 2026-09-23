@@ -8,7 +8,7 @@ struct Card<Content: View>: View {
     var systemImage: String?
     var accent: Color
     @ViewBuilder var content: () -> Content
-
+    
     init(
         _ title: String? = nil,
         systemImage: String? = nil,
@@ -20,7 +20,7 @@ struct Card<Content: View>: View {
         self.accent = accent
         self.content = content
     }
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let title {
@@ -59,7 +59,7 @@ struct Card<Content: View>: View {
 struct BatteryRing: View {
     let percentage: Int
     let isCharging: Bool
-
+    
     private var color: Color {
         if isCharging { return .green }
         switch percentage {
@@ -68,7 +68,7 @@ struct BatteryRing: View {
         default: return .red
         }
     }
-
+    
     var body: some View {
         ZStack {
             Circle()

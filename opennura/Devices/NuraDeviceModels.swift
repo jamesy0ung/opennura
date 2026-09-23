@@ -5,7 +5,7 @@ import Foundation
 struct NuraAncState: Equatable {
     var ancEnabled: Bool
     var passthroughEnabled: Bool
-
+    
     var mode: NuraAncMode {
         passthroughEnabled ? .passthrough : (ancEnabled ? .anc : .off)
     }
@@ -28,7 +28,7 @@ enum NuraDeviceFamily: String, CaseIterable {
     case nuraTruePro
     case nuraTrueFamily
     case unknown
-
+    
     static func forSerial(_ serial: Int?) -> NuraDeviceFamily {
         guard let serial else { return .unknown }
         switch serial {
@@ -39,7 +39,7 @@ enum NuraDeviceFamily: String, CaseIterable {
         default: return .unknown
         }
     }
-
+    
     var displayName: String {
         switch self {
         case .nuraphone: return "Nuraphone"
@@ -49,7 +49,7 @@ enum NuraDeviceFamily: String, CaseIterable {
         case .unknown: return "Nura device"
         }
     }
-
+    
     /// Nuraphone uses a boolean anc/social pair; every device since uses a
     /// 0...6 level continuum instead.
     var usesAncLevel: Bool {
@@ -71,7 +71,7 @@ struct NuraBatteryStatus: Equatable {
     var chargerLevelRaw: Int
     var ntcVoltageMillivolts: Int
     var ntcLevelRaw: Int
-
+    
     var isCharging: Bool { chargerStateRaw != 0 }
 }
 
@@ -125,9 +125,9 @@ enum NuraButtonFunction: UInt8, CaseIterable, Identifiable {
     case kickItDown = 0x17
     case toggleSpatial = 0x18
     case toggleGamingMode = 0x19
-
+    
     var id: UInt8 { rawValue }
-
+    
     var label: String {
         switch self {
         case .none: return "None"
@@ -158,7 +158,7 @@ enum NuraButtonFunction: UInt8, CaseIterable, Identifiable {
         case .toggleGamingMode: return "Toggle Gaming Mode"
         }
     }
-
+    
     static func fromRawByte(_ value: UInt8) -> NuraButtonFunction {
         NuraButtonFunction(rawValue: value) ?? .none
     }
@@ -171,7 +171,7 @@ struct NuraButtonCapabilities {
     var supportsDoubleTap: Bool
     var supportsTripleTap: Bool
     var offeredFunctions: [NuraButtonFunction]
-
+    
     /// The Nuraphone-curated set; other families without confirmed firmware
     /// versioning fall back to it too rather than guess.
     private static let baseline = NuraButtonCapabilities(
@@ -192,7 +192,7 @@ struct NuraButtonCapabilities {
             .toggleKickIt,
         ]
     )
-
+    
     static func `for`(_ family: NuraDeviceFamily) -> NuraButtonCapabilities {
         switch family {
         case .nuraphone, .unknown, .nuraLoop:
@@ -222,7 +222,7 @@ struct NuraButtonConfiguration: Equatable {
     var rightTapAndHold: NuraButtonFunction?
     var leftTripleTap: NuraButtonFunction?
     var rightTripleTap: NuraButtonFunction?
-
+    
     func toBytes(supportsDoubleTap: Bool, supportsTripleTap: Bool) -> [UInt8] {
         var bytes: [UInt8] = [leftSingleTap.rawValue, rightSingleTap.rawValue]
         if supportsDoubleTap {
@@ -250,9 +250,9 @@ enum NuraDialFunction: UInt8, CaseIterable, Identifiable {
     case kickit = 0x01
     case anc = 0x02
     case volume = 0x03
-
+    
     var id: UInt8 { rawValue }
-
+    
     var label: String {
         switch self {
         case .none: return "None"
@@ -261,7 +261,7 @@ enum NuraDialFunction: UInt8, CaseIterable, Identifiable {
         case .volume: return "Volume"
         }
     }
-
+    
     static func fromRawByte(_ value: UInt8) -> NuraDialFunction {
         NuraDialFunction(rawValue: value) ?? .none
     }
@@ -272,7 +272,7 @@ enum NuraDialFunction: UInt8, CaseIterable, Identifiable {
 struct NuraDialConfiguration: Equatable {
     var left: NuraDialFunction
     var right: NuraDialFunction
-
+    
     func toBytes() -> [UInt8] {
         [left.rawValue, right.rawValue]
     }
@@ -291,7 +291,7 @@ struct NuraClassicKickitParams: Equatable {
     var drcRaw: UInt8
     var lpfRaw: UInt8
     var gainRaw: UInt8
-
+    
     var immersionLevel: NuraImmersionLevel? {
         switch (drcRaw, lpfRaw, gainRaw) {
         case (0x04, 0x00, 0x02): return .positive4
@@ -304,7 +304,7 @@ struct NuraClassicKickitParams: Equatable {
         default: return nil
         }
     }
-
+    
     static func from(_ level: NuraImmersionLevel) -> NuraClassicKickitParams {
         switch level {
         case .positive4: return .init(drcRaw: 0x04, lpfRaw: 0x00, gainRaw: 0x02)
@@ -335,7 +335,7 @@ struct NuraProfileVisualisation: Equatable {
     var colour: Double
     var left: [Double]
     var right: [Double]
-
+    
     /// A single combined curve (mean of left and right at each point), which is
     /// what we plot as the profile shape.
     var combined: [Double] {
@@ -343,7 +343,7 @@ struct NuraProfileVisualisation: Equatable {
         guard count > 0 else { return [] }
         return (0..<count).map { (left[$0] + right[$0]) * 0.5 }
     }
-
+    
     var isEmpty: Bool { left.isEmpty && right.isEmpty }
 }
 

@@ -5,29 +5,29 @@ import Foundation
 enum MacBluetoothTransport: String, CaseIterable, Identifiable {
     case rfcomm = "RFCOMM"
     case btle = "BTLE"
-
+    
     var id: Self { self }
 }
 #endif
 
 @MainActor
 final class NuraDeviceManager: NSObject, ObservableObject {
-
+    
     @Published var phase: ConnectionPhase = .idle
     @Published var logs: [String] = []
     @Published private(set) var connectedDeviceName = "Nura device"
     /// Becomes non-nil only after a recovered key has been saved successfully.
     /// This is the UI's completion event for the provisioning flow.
     @Published private(set) var recoveredDeviceSerial: String?
-
+    
     /// When on, connecting first disconnects the headphones' audio link (macOS
     /// only), so the control handshake is reliable without visiting Bluetooth
     /// settings. Persisted; on by default.
     @Published var autoDisconnectAudio: Bool = UserDefaults.standard.object(forKey: "autoDisconnectAudio") as? Bool ?? true {
         didSet { UserDefaults.standard.set(autoDisconnectAudio, forKey: "autoDisconnectAudio") }
     }
-
-    #if os(macOS)
+    
+#if os(macOS)
     /// Transport used for the next connection. Original Nuraphones generally
     /// use RFCOMM; products such as NuraLoop expose the GAIA channel over BLE.
     @Published var macBluetoothTransport: MacBluetoothTransport {
@@ -36,50 +36,50 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             replaceTransportForMac()
         }
     }
-    #endif
-
+#endif
+    
     let state = NuraDeviceState()
     let provisioning = NuraProvisioningManager()
-
+    
     /// App-side custom profile names (display only; not sent to the device).
     @Published var localProfileNames: [Int: String] = [:]
-
+    
     enum Mode { case control, provision }
     private var mode: Mode = .control
-
+    
     private var transport: NuraTransport
     private var nuraKey: [UInt8] = []
     private var session: NuraSession?
     private var gaiaCommandBusy = false
     private let configStore = NuraConfigStore()
     private var batteryTimer: Timer?
-
+    
     /// True when at least one device key is stored (used to offer auto-connect).
     var hasSavedDevices: Bool { !configStore.load().devices.isEmpty }
-
+    
     /// Connects automatically if a device key is already saved and we're idle.
     func autoConnectIfAvailable() {
         guard phase.isIdle, hasSavedDevices else { return }
         connect()
     }
-
+    
     override init() {
         // The nuraphone exposes GAIA over classic Bluetooth SPP, which on macOS
         // is reached via IOBluetooth RFCOMM. iOS can't do RFCOMM to non-MFi
         // devices, so it falls back to BLE.
-        #if os(macOS)
+#if os(macOS)
         let savedTransport = UserDefaults.standard.string(forKey: "macBluetoothTransport")
             .flatMap(MacBluetoothTransport.init(rawValue:)) ?? .rfcomm
         self.macBluetoothTransport = savedTransport
         self.transport = savedTransport == .btle ? BLETransport() : ClassicBTTransport()
-        #else
+#else
         self.transport = BLETransport()
-        #endif
+#endif
         super.init()
         self.transport.delegate = self
     }
-
-    #if os(macOS)
+    
+#if os(macOS)
     private func replaceTransportForMac() {
         // The picker is disabled during an active connection. Still guard here
         // so a programmatic change cannot replace a live transport.
@@ -88,15 +88,15 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         transport.delegate = nil
         transport.disconnect()
         transport = macBluetoothTransport == .btle
-            ? BLETransport()
-            : ClassicBTTransport()
+        ? BLETransport()
+        : ClassicBTTransport()
         transport.delegate = self
         addLog("Bluetooth transport: \(macBluetoothTransport.rawValue)")
     }
-    #endif
-
+#endif
+    
     // MARK: - Provisioning (recover device key from the Nura backend)
-
+    
     /// Connects to the headphones and runs backend-assisted provisioning to
     /// recover and store the long-lived device key. Requires being signed in.
     func fetchDeviceKey() {
@@ -118,18 +118,18 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         transport.autoResetOnConnect = autoDisconnectAudio
         transport.scan()
     }
-
+    
     /// Clears the transient completion event after the provisioning UI closes.
     /// The saved device key itself is unaffected.
     func clearRecoveredDeviceResult() {
         recoveredDeviceSerial = nil
     }
-
+    
     private func runProvisioningRelay(serial: Int, firmware: Int) {
         phase = .handshaking
         addLog("Provisioning: recovering device key from Nura backend...")
         let maxPacket = configStore.load().deviceBySerial(String(serial))?.maxPacketLengthHint ?? 182
-
+        
         let sender: NuraProvisioningManager.FrameSender = { [weak self] cmd, payload in
             try await withCheckedThrowingContinuation { continuation in
                 guard let self else {
@@ -150,7 +150,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
                 }
             }
         }
-
+        
         Task { @MainActor in
             do {
                 let key = try await provisioning.recoverDeviceKey(
@@ -184,9 +184,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     // MARK: - Connection
-
+    
     func connect() {
         guard phase.isIdle else { return }
         mode = .control
@@ -201,7 +201,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         transport.autoResetOnConnect = autoDisconnectAudio
         transport.scan()
     }
-
+    
     func disconnect() {
         stopBatteryTimer()
         transport.stopScan()
@@ -214,7 +214,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         phase = .idle
         addLog("Disconnected")
     }
-
+    
     /// Immediately tears the connection down and reports a failure. Used when
     /// something looks wrong enough that we should stop talking to the device
     /// rather than send it any more frames.
@@ -229,23 +229,23 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         phase = .failed(reason)
         addLog("Aborted for safety: \(reason)")
     }
-
+    
     // MARK: - Battery auto-refresh
-
+    
     private func startBatteryTimer() {
         stopBatteryTimer()
         batteryTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshBattery() }
         }
     }
-
+    
     private func stopBatteryTimer() {
         batteryTimer?.invalidate()
         batteryTimer = nil
     }
-
+    
     // MARK: - ANC
-
+    
     func setAncState(anc: Bool, social: Bool) {
         guard phase.isReady else { return }
         let profileId = UInt8(state.profileId ?? 0)
@@ -264,11 +264,11 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     func setAncEnabled(_ enabled: Bool) {
         setAncState(anc: enabled, social: state.passthroughEnabled)
     }
-
+    
     /// Sets the combined noise mode (Off / ANC / Passthrough).
     func setAncMode(_ mode: NuraAncMode) {
         switch mode {
@@ -277,11 +277,11 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         case .passthrough: setAncState(anc: false, social: true)
         }
     }
-
+    
     func setSocialMode(_ enabled: Bool) {
         setAncState(anc: state.ancEnabled, social: enabled)
     }
-
+    
     func setAncLevel(_ level: Int) {
         guard phase.isReady else { return }
         let profileId = UInt8(state.profileId ?? 0)
@@ -302,7 +302,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             setGlobalAncEnabled(true)
         }
     }
-
+    
     func setGlobalAncEnabled(_ enabled: Bool) {
         guard phase.isReady else { return }
         let profileId = UInt8(state.profileId ?? 0)
@@ -311,9 +311,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             if case .success = result { self?.state.globalAncEnabled = enabled }
         }
     }
-
+    
     // MARK: - Immersion
-
+    
     func setImmersion(_ level: Int) {
         guard phase.isReady else {
             addLog("Not ready")
@@ -342,9 +342,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     // MARK: - Sound mode
-
+    
     func setSoundMode(_ mode: NuraPersonalisationMode) {
         guard phase.isReady else { return }
         // Optimistic update to avoid the segmented control flickering back.
@@ -364,9 +364,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     // MARK: - Spatial
-
+    
     func setSpatialEnabled(_ enabled: Bool) {
         guard phase.isReady else { return }
         let opcode: UInt16
@@ -382,9 +382,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             if case .success = result { self?.state.spatialEnabled = enabled }
         }
     }
-
+    
     // MARK: - Profiles
-
+    
     func selectProfile(_ profileId: Int) {
         guard phase.isReady else { return }
         addLog("-> SelectProfile \(profileId)")
@@ -401,7 +401,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     /// Re-reads the per-profile values (immersion, ANC) for the current profile.
     /// These are pure reads and are already part of the safe startup set.
     private func refreshProfileScopedState() {
@@ -409,9 +409,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             self?.readKickitParams {}
         }
     }
-
+    
     // MARK: - Battery
-
+    
     func refreshBattery() {
         guard phase.isReady else { return }
         sendEncrypted(opcode: cmdGetBatteryStatus, params: []) { [weak self] result in
@@ -422,9 +422,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     // MARK: - Button configuration
-
+    
     func setButtonConfiguration(_ config: NuraButtonConfiguration) {
         guard phase.isReady else { return }
         let caps = NuraButtonCapabilities.for(family)
@@ -434,9 +434,28 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             if case .success = result { self?.state.buttons = config }
         }
     }
-
+    
+    // MARK: - Discoverable mode
+    
+    /// Puts the headset into Bluetooth pairing mode for 120 seconds
+    func enterDiscoverableMode(completion: @escaping (Result<Void, Error>) -> Void) {
+        guard phase.isReady else { completion(.failure(NuraError.notReady)); return }
+        addLog("-> EnterDiscoverable (120 s)")
+        // Param is a big-endian uint16 timeout: pack(">H", 120) = [0x00, 0x78]
+        sendEncrypted(opcode: cmdEnterDiscoverable, params: [0x00, 0x78]) { [weak self] result in
+            switch result {
+            case .success:
+                self?.addLog("<- EnterDiscoverable: success")
+                completion(.success(()))
+            case .failure(let e):
+                self?.addLog("<- EnterDiscoverable error: \(e.localizedDescription)")
+                completion(.failure(e))
+            }
+        }
+    }
+    
     // MARK: - Dial configuration
-
+    
     func setDialConfiguration(_ config: NuraDialConfiguration) {
         guard phase.isReady else { return }
         let profileId = UInt8(state.profileId ?? 0)
@@ -444,17 +463,17 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             if case .success = result { self?.state.dial = config }
         }
     }
-
+    
     // MARK: - Logging
-
+    
     func addLog(_ msg: String) {
         let ts = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
         logs.append("[\(ts)] \(msg)")
         if logs.count > 300 { logs.removeFirst(logs.count - 300) }
     }
-
+    
     // MARK: - GAIA frame send
-
+    
     private func sendGaiaFrame(
         cmd: UInt16,
         payload: [UInt8],
@@ -465,9 +484,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         let frame = GaiaFrame(commandId: cmd, payload: payload)
         transport.sendFrame(frame, expectedAck: expectedAck, minResponseLen: minResponseLen, completion: completion)
     }
-
+    
     // MARK: - Encrypted command
-
+    
     private func sendEncrypted(
         opcode: UInt16,
         params: [UInt8],
@@ -482,13 +501,13 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             return
         }
         gaiaCommandBusy = true
-
+        
         var plain: [UInt8] = [UInt8((opcode >> 8) & 0xFF), UInt8(opcode & 0xFF)]
         plain += params
         let (tag, ct) = session.encryptAppToDev(plain)
-
+        
         addLog(String(format: "  enc opcode=0x%04x ctr=%d", opcode, session.encCtr - 1))
-
+        
         sendGaiaFrame(
             cmd: cmdEncryptedCommand,
             payload: tag + ct,
@@ -521,9 +540,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     // MARK: - Connection & GAIA sequence
-
+    
     private func runGaiaSequence() {
         addLog("GAIA: GetDeviceInfo (0x0001)")
         sendGaiaFrame(
@@ -558,7 +577,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             self.runHandshake()
         }
     }
-
+    
     private func applyConfiguredKey(forSerial serial: Int) -> Bool {
         let config = configStore.load()
         guard let entry = config.deviceBySerial(String(serial)) else {
@@ -578,11 +597,11 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         addLog("  using configured key for serial \(serial)")
         return true
     }
-
+    
     private func deviceTypeName(forSerial serial: Int) -> String {
         NuraDeviceFamily.forSerial(serial).displayName
     }
-
+    
     private func persistConnectedDeviceIdentity(serial: Int) {
         var config = configStore.load()
         let serialString = String(serial)
@@ -592,7 +611,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         config.upsertDevice(entry)
         configStore.save(config)
     }
-
+    
     private func runHandshake() {
         phase = .handshaking
         addLog("GAIA: CryptoAppGenerateChallenge (0x0002)")
@@ -620,16 +639,16 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     private func continueHandshake(challenge: [UInt8]) {
         var nonce = [UInt8](repeating: 0, count: 12)
         for i in 0..<12 { nonce[i] = UInt8.random(in: 0...255) }
         addLog("  nonce=\(hexStr(Data(nonce)))")
-
+        
         let j0App = makeJ0(nonce: nonce, counter: 1, deviceToApp: false)
         let (_, appGmac) = gcmWithJ0(key: nuraKey, j0: j0App, aad: challenge, plaintext: [])
         addLog("  app GMAC=\(hexStr(Data(appGmac)))")
-
+        
         sendGaiaFrame(
             cmd: cmdCryptoValidateChallenge,
             payload: nonce + appGmac,
@@ -663,9 +682,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     // MARK: - Startup sequence (matches NuraLib's CreateSafeStartupReads)
-
+    
     private func runStartupSequence() {
         addLog("Reading initial state...")
         // Only the upstream-proven read set. The extra reads (ANC level,
@@ -685,7 +704,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     private func finishStartup() {
         phase = .ready
         addLog("Ready")
@@ -697,15 +716,15 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             localProfileNames = loadProfileLabels(serial: serial)
         }
     }
-
+    
     // MARK: - Local (app-side) profile names
-
+    
     /// The primary name to show for a profile: a user-set app label, else the
     /// device's own name, else a numbered fallback.
     func displayProfileName(_ id: Int) -> String {
         localProfileNames[id] ?? state.profileNames[id] ?? "Profile \(id + 1)"
     }
-
+    
     /// The parenthetical detail shown after a custom name: the device's own
     /// profile name if it has one, else the numbered fallback. Returns nil when
     /// there's no custom name (so nothing extra is shown).
@@ -713,13 +732,13 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         guard localProfileNames[id] != nil else { return nil }
         return state.profileNames[id] ?? "Profile \(id + 1)"
     }
-
+    
     /// Whether the device actually reported a profile in this slot. Slots the
     /// headphones report no name for are treated as empty.
     func isProfilePopulated(_ id: Int) -> Bool {
         state.profileNames[id] != nil
     }
-
+    
     /// Renames a profile in the app only (no command is sent to the device).
     func renameProfile(_ id: Int, to name: String) {
         guard let serial = state.deviceInfo?.serialNumber else { return }
@@ -737,7 +756,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         config.profileLabels = labels
         configStore.save(config)
     }
-
+    
     private func loadProfileLabels(serial: Int) -> [Int: String] {
         let all = configStore.load().profileLabels ?? [:]
         var out: [Int: String] = [:]
@@ -746,22 +765,22 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         }
         return out
     }
-
+    
     // MARK: - Profile visualisation
-
+    
     /// Whether this device's firmware exposes the hearing-profile visualisation
     /// data. Per the reference capability map, the Nuraphone gains it only on
     /// firmware newer than 510. If we don't know the firmware yet, assume no.
     var supportsVisualisation: Bool {
         (state.deviceInfo?.firmwareVersion ?? 0) > 510
     }
-
+    
     /// The connected device's product family, inferred from its serial number.
     /// `.unknown` before a device-info response has arrived.
     var family: NuraDeviceFamily {
         NuraDeviceFamily.forSerial(state.deviceInfo?.serialNumber)
     }
-
+    
     /// Reads the visualisation for every populated profile in turn (used by the
     /// comparison view). Sequential because only one encrypted command is in
     /// flight at a time. Pure reads; nothing is played.
@@ -770,7 +789,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         let ids = [0, 1, 2].filter { isProfilePopulated($0) }
         readVisualisationChain(ids, index: 0)
     }
-
+    
     private func readVisualisationChain(_ ids: [Int], index: Int) {
         guard index < ids.count else { return }
         let profileId = ids[index]
@@ -783,9 +802,9 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             self?.readVisualisationChain(ids, index: index + 1)
         }
     }
-
+    
     // MARK: - Quick actions (used by global hotkeys)
-
+    
     /// Steps immersion by delta, clamped to the device's supported range
     /// (-2...4 classic, -3...+3 on NuraTrue Pro). Returns the new level for
     /// feedback.
@@ -796,7 +815,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         setImmersion(newLevel)
         return newLevel
     }
-
+    
     /// Toggles noise control between its two extremes: the boolean
     /// ANC/Passthrough pair on the Nuraphone, or the 0...6 level continuum
     /// (below the midpoint jumps to full ANC, otherwise full social) on
@@ -822,7 +841,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         setAncLevel(target)
         return target >= 4 ? .passthrough : .anc
     }
-
+    
     /// Cycles to the next/previous populated profile. Returns the profile id it
     /// switched to, or nil if there are none.
     @discardableResult
@@ -836,7 +855,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         selectProfile(target)
         return target
     }
-
+    
     /// Reads a profile's hearing-signature visualisation on demand. This is a
     /// pure read (0x00B8): it fetches stored numbers and plays nothing. It is
     /// never part of the automatic connect sequence - only the user tapping to
@@ -862,7 +881,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     /// Reads the current button configuration on demand (used by the remap
     /// screen). Not part of the automatic connect sequence.
     func refreshButtonConfig() {
@@ -872,7 +891,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
         sendEncrypted(opcode: cmdGetButtonConfigV1, params: [UInt8(state.profileId ?? 0)]) { [weak self] result in
             if case .success(let pt) = result,
                let config = NuraResponseParsers.decodeButtonConfiguration(
-                   pt, supportsDoubleTap: caps.supportsDoubleTap, supportsTripleTap: caps.supportsTripleTap
+                pt, supportsDoubleTap: caps.supportsDoubleTap, supportsTripleTap: caps.supportsTripleTap
                ) {
                 self?.state.buttons = config
                 self?.addLog("<- button config loaded")
@@ -881,7 +900,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     private func readCurrentProfileId(then next: @escaping () -> Void) {
         sendEncrypted(opcode: cmdGetCurrentProfileId, params: []) { [weak self] result in
             if case .success(let pt) = result,
@@ -892,7 +911,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             next()
         }
     }
-
+    
     private func readProfileNames(then next: @escaping () -> Void) {
         readProfileName(id: 0) { [weak self] in
             self?.readProfileName(id: 1) {
@@ -902,7 +921,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             }
         }
     }
-
+    
     private func readProfileName(id: Int, then next: @escaping () -> Void) {
         sendEncrypted(opcode: cmdGetProfileName, params: [UInt8(id)]) { [weak self] result in
             if case .success(let pt) = result,
@@ -913,7 +932,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             next()
         }
     }
-
+    
     private func readAncState(then next: @escaping () -> Void) {
         let profileId = UInt8(state.profileId ?? 0)
         sendEncrypted(opcode: cmdGetAncState, params: [profileId]) { [weak self] result in
@@ -925,7 +944,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             next()
         }
     }
-
+    
     private func readKickitParams(then next: @escaping () -> Void) {
         sendEncrypted(opcode: cmdGetKickitParams, params: [UInt8(state.profileId ?? 0)]) { [weak self] result in
             if case .success(let pt) = result,
@@ -937,7 +956,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             next()
         }
     }
-
+    
     private func readBattery(then next: @escaping () -> Void) {
         sendEncrypted(opcode: cmdGetBatteryStatus, params: []) { [weak self] result in
             if case .success(let pt) = result,
@@ -948,7 +967,7 @@ final class NuraDeviceManager: NSObject, ObservableObject {
             next()
         }
     }
-
+    
     private func readKickitEnabled(then next: @escaping () -> Void) {
         sendEncrypted(opcode: cmdGetKickitEnabled, params: [UInt8(state.profileId ?? 0)]) { [weak self] result in
             if case .success(let pt) = result,
@@ -968,7 +987,7 @@ extension NuraDeviceManager: NuraTransportDelegate {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         connectedDeviceName = trimmed.isEmpty ? "Nura device" : trimmed
     }
-
+    
     func transportDidUpdatePhase(_ newPhase: ConnectionPhase) {
         switch newPhase {
         case .handshaking:
@@ -994,12 +1013,12 @@ extension NuraDeviceManager: NuraTransportDelegate {
             break
         }
     }
-
+    
     func transportDidReceiveIndication(_ response: GaiaResponse) {
         if let indication = HeadsetIndicationParser.parse(response) {
             handleIndication(indication)
         }
-
+        
         var logLine = String(
             format: "<- event 0x%04x payload=%@",
             response.rawCommandId, hexStr(Data(response.payload))
@@ -1007,11 +1026,11 @@ extension NuraDeviceManager: NuraTransportDelegate {
         if let desc = gaiaEventDescription(response.payload) { logLine += "  [\(desc)]" }
         addLog(logLine)
     }
-
+    
     func transportDidLog(_ message: String) {
         addLog(message)
     }
-
+    
     private func handleIndication(_ indication: HeadsetIndication) {
         switch indication.identifier {
         case .ancParametersChanged:

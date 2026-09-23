@@ -5,17 +5,17 @@ import Foundation
 final class BLETransport: NSObject, NuraTransport {
     weak var delegate: NuraTransportDelegate?
     var autoResetOnConnect = false   // not used on BLE; classic transport only
-
+    
     private(set) var phase: ConnectionPhase = .idle {
         didSet { delegate?.transportDidUpdatePhase(phase) }
     }
-
+    
     private var central: CBCentralManager!
     private var peripheral: CBPeripheral?
     private var cmdChar: CBCharacteristic?
     private var rspChar: CBCharacteristic?
     private var pendingServiceCount = 0
-
+    
     private var pendingAck: UInt16 = 0
     private var pendingMinLen: Int = 0
     private var pendingCompletion: ((Result<[UInt8], Error>) -> Void)?
@@ -27,7 +27,7 @@ final class BLETransport: NSObject, NuraTransport {
     private var pollAttempts = 0
     private let maxPollAttempts = 80
     private var seenDeviceNames: Set<String> = []
-
+    
     override init() {
         super.init()
         central = CBCentralManager(
@@ -36,7 +36,7 @@ final class BLETransport: NSObject, NuraTransport {
             options: [CBCentralManagerOptionShowPowerAlertKey: true]
         )
     }
-
+    
     func scan() {
         guard phase.isIdle else { return }
         peripheral = nil
@@ -44,7 +44,7 @@ final class BLETransport: NSObject, NuraTransport {
         rspChar = nil
         seenDeviceNames.removeAll()
         phase = .scanning
-
+        
         // A nuraphone that is already connected to the Mac (e.g. for audio)
         // often doesn't advertise over BLE, so a scan never finds it. Ask the
         // system for already-connected peripherals exposing the GAIA service
@@ -78,10 +78,10 @@ final class BLETransport: NSObject, NuraTransport {
             )
             return
         }
-
+        
         beginScanning()
     }
-
+    
     private func beginScanning() {
         delegate?.transportDidLog("BLE: Scanning for Nura device...")
         central.scanForPeripherals(
@@ -89,11 +89,11 @@ final class BLETransport: NSObject, NuraTransport {
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
         )
     }
-
+    
     func stopScan() {
         central.stopScan()
     }
-
+    
     /// True for a genuine Nura product name, or a Denon Perl / Perl Pro
     /// (a rebadged NuraTrue / NuraTrue Pro running the same GAIA firmware
     /// under a different advertised name - see docs/DENON-NURATRUE-PRO.md).
@@ -104,7 +104,7 @@ final class BLETransport: NSObject, NuraTransport {
         let n = name.lowercased()
         return n.contains("nura") || n.contains("denon") || n.contains("perl")
     }
-
+    
     func disconnect() {
         stopPolling()
         let cb = pendingCompletion
@@ -120,7 +120,7 @@ final class BLETransport: NSObject, NuraTransport {
         rspChar = nil
         phase = .idle
     }
-
+    
     func sendFrame(
         _ frame: GaiaFrame,
         expectedAck: UInt16,
@@ -138,7 +138,7 @@ final class BLETransport: NSObject, NuraTransport {
         pendingFrame = frame.bleData
         writeFrame()
     }
-
+    
     func sendRawFrameCapturingResponse(
         commandId: UInt16,
         payload: [UInt8],
@@ -159,13 +159,13 @@ final class BLETransport: NSObject, NuraTransport {
         pendingFrame = GaiaFrame(commandId: commandId, payload: payload).bleData
         writeFrame()
     }
-
+    
     // MARK: - Internal
-
+    
     private var hasPending: Bool {
         pendingCompletion != nil || pendingRawCompletion != nil
     }
-
+    
     private func failPending(_ error: Error) {
         stopPolling()
         pendingAck = 0
@@ -179,16 +179,16 @@ final class BLETransport: NSObject, NuraTransport {
             cb(.failure(error))
         }
     }
-
+    
     private func writeFrame() {
         guard let ch = cmdChar, let p = peripheral, let frame = pendingFrame
-        else { return }
+                else { return }
         let wType: CBCharacteristicWriteType =
-            ch.properties.contains(.write) ? .withResponse : .withoutResponse
+        ch.properties.contains(.write) ? .withResponse : .withoutResponse
         p.writeValue(frame, for: ch, type: wType)
         startPolling()
     }
-
+    
     private func startPolling() {
         pollAttempts = 0
         pollTimer?.invalidate()
@@ -196,12 +196,12 @@ final class BLETransport: NSObject, NuraTransport {
             MainActor.assumeIsolated { self?.pollTick() }
         }
     }
-
+    
     private func stopPolling() {
         pollTimer?.invalidate()
         pollTimer = nil
     }
-
+    
     private func pollTick() {
         guard hasPending else {
             stopPolling()
@@ -212,7 +212,7 @@ final class BLETransport: NSObject, NuraTransport {
             failPending(NuraError.timeout)
         }
     }
-
+    
     private func resolveResponse(_ payload: [UInt8]) {
         stopPolling()
         let cb = pendingCompletion
@@ -220,7 +220,7 @@ final class BLETransport: NSObject, NuraTransport {
         pendingAck = 0
         cb?(.success(payload))
     }
-
+    
     private func resolveRawResponse(_ response: GaiaResponse) {
         stopPolling()
         let cb = pendingRawCompletion
@@ -233,7 +233,7 @@ final class BLETransport: NSObject, NuraTransport {
 // MARK: - CBCentralManagerDelegate
 
 extension BLETransport: CBCentralManagerDelegate {
-
+    
     nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
         MainActor.assumeIsolated {
             switch central.state {
@@ -260,7 +260,7 @@ extension BLETransport: CBCentralManagerDelegate {
             }
         }
     }
-
+    
     nonisolated func centralManager(
         _ central: CBCentralManager,
         didDiscover peripheral: CBPeripheral,
@@ -268,9 +268,9 @@ extension BLETransport: CBCentralManagerDelegate {
         rssi RSSI: NSNumber
     ) {
         let name =
-            peripheral.name
-            ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
-            ?? "<no name>"
+        peripheral.name
+        ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
+        ?? "<no name>"
         let advertisedServices = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID]) ?? []
         // Match the Nura product family (Nuraphone, NuraLoop, etc.) or a
         // Denon-badged Perl / Perl Pro. The device-info exchange remains the
@@ -282,25 +282,25 @@ extension BLETransport: CBCentralManagerDelegate {
             match = advertisedServices.contains(gaiaServiceUUID)
         }
         if !match,
-            let mfg = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data
+           let mfg = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data
         {
             let suffix = [UInt8](mfg).suffix(6)
             match = suffix == ArraySlice(nuraphoneBdAddrSuffix) || suffix == ArraySlice(denonPerlProBdAddrSuffix)
         }
-
+        
         MainActor.assumeIsolated {
             // Diagnostic: log every distinct device seen while scanning, so an
             // unrecognised nuraphone name shows up in the log.
             if self.seenDeviceNames.insert(name).inserted {
                 let svc = advertisedServices.isEmpty
-                    ? ""
-                    : " services=[\(advertisedServices.map { $0.uuidString }.joined(separator: ", "))]"
+                ? ""
+                : " services=[\(advertisedServices.map { $0.uuidString }.joined(separator: ", "))]"
                 delegate?.transportDidLog("  saw device: \"\(name)\"\(svc)")
             }
         }
-
+        
         guard match else { return }
-
+        
         MainActor.assumeIsolated {
             guard self.peripheral == nil else { return }
             central.stopScan()
@@ -318,7 +318,7 @@ extension BLETransport: CBCentralManagerDelegate {
             )
         }
     }
-
+    
     nonisolated func centralManager(
         _ central: CBCentralManager,
         didConnect peripheral: CBPeripheral
@@ -329,7 +329,7 @@ extension BLETransport: CBCentralManagerDelegate {
             peripheral.discoverServices(nil)
         }
     }
-
+    
     nonisolated func centralManager(
         _ central: CBCentralManager,
         didFailToConnect peripheral: CBPeripheral,
@@ -340,7 +340,7 @@ extension BLETransport: CBCentralManagerDelegate {
             phase = .failed("Connect failed")
         }
     }
-
+    
     nonisolated func centralManager(
         _ central: CBCentralManager,
         didDisconnectPeripheral peripheral: CBPeripheral,
@@ -368,7 +368,7 @@ extension BLETransport: CBCentralManagerDelegate {
 // MARK: - CBPeripheralDelegate
 
 extension BLETransport: CBPeripheralDelegate {
-
+    
     nonisolated func peripheral(
         _ peripheral: CBPeripheral,
         didDiscoverServices error: Error?
@@ -386,7 +386,7 @@ extension BLETransport: CBPeripheralDelegate {
             }
         }
     }
-
+    
     nonisolated func peripheral(
         _ peripheral: CBPeripheral,
         didDiscoverCharacteristicsFor service: CBService,
@@ -423,7 +423,7 @@ extension BLETransport: CBPeripheralDelegate {
             }
         }
     }
-
+    
     nonisolated func peripheral(
         _ peripheral: CBPeripheral,
         didUpdateNotificationStateFor characteristic: CBCharacteristic,
@@ -437,7 +437,7 @@ extension BLETransport: CBPeripheralDelegate {
             }
         }
     }
-
+    
     nonisolated func peripheral(
         _ peripheral: CBPeripheral,
         didUpdateValueFor characteristic: CBCharacteristic,
@@ -446,7 +446,7 @@ extension BLETransport: CBPeripheralDelegate {
         let uuid = characteristic.uuid
         let capturedValue = characteristic.value
         let capturedError = error
-
+        
         MainActor.assumeIsolated {
             if let e = capturedError {
                 if uuid == gaiaResponseUUID, hasPending { return }
@@ -454,29 +454,29 @@ extension BLETransport: CBPeripheralDelegate {
                 return
             }
             guard uuid == gaiaResponseUUID,
-                let data = capturedValue,
-                let response = GaiaResponse.fromBLE(data)
-            else { return }
+                  let data = capturedValue,
+                  let response = GaiaResponse.fromBLE(data)
+                    else { return }
             guard response.vendorId == gaiaVendor else { return }
-
+            
             if response.isAck, response.commandId == (cmdEventNotification & 0x1FFF) {
                 delegate?.transportDidReceiveIndication(response)
                 return
             }
-
+            
             delegate?.transportDidLog(
                 String(
                     format: "<- GAIA cmd=0x%04x (%d bytes) payload=%@",
                     response.rawCommandId, response.payload.count, hexStr(Data(response.payload))
                 )
             )
-
+            
             // Provisioning relay: accept the next non-indication frame as-is.
             if pendingRawCompletion != nil {
                 resolveRawResponse(response)
                 return
             }
-
+            
             if response.isAck, response.commandId == (pendingAck & 0x1FFF) {
                 if response.payload.count < pendingMinLen {
                     delegate?.transportDidLog(
@@ -491,7 +491,7 @@ extension BLETransport: CBPeripheralDelegate {
             }
         }
     }
-
+    
     nonisolated func peripheral(
         _ peripheral: CBPeripheral,
         didWriteValueFor characteristic: CBCharacteristic,
@@ -505,10 +505,10 @@ extension BLETransport: CBPeripheralDelegate {
                 delegate?.transportDidLog("Write error: \(e.localizedDescription)")
                 let ns = e as NSError
                 let isEnc =
-                    ns.domain == CBATTErrorDomain
-                    && (ns.code == CBATTError.insufficientEncryption.rawValue
-                        || ns.code == CBATTError.insufficientAuthentication.rawValue
-                        || ns.code == CBATTError.insufficientResources.rawValue)
+                ns.domain == CBATTErrorDomain
+                && (ns.code == CBATTError.insufficientEncryption.rawValue
+                    || ns.code == CBATTError.insufficientAuthentication.rawValue
+                    || ns.code == CBATTError.insufficientResources.rawValue)
                 if isEnc, writeRetries < maxRetries {
                     writeRetries += 1
                     let delay = min(Double(writeRetries), 3.0)
@@ -526,7 +526,7 @@ extension BLETransport: CBPeripheralDelegate {
             }
         }
     }
-
+    
     nonisolated func peripheral(
         _ peripheral: CBPeripheral,
         didModifyServices invalidatedServices: [CBService]

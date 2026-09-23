@@ -6,18 +6,18 @@ struct ProvisioningView: View {
     @ObservedObject var device: NuraDeviceManager
     @ObservedObject var provisioning: NuraProvisioningManager
     @Environment(\.dismiss) private var dismiss
-
+    
     @State private var email: String = ""
     @State private var code: String = ""
     @State private var errorText: String?
-
+    
     var body: some View {
         Group {
-        #if os(iOS)
+#if os(iOS)
             phoneBody
-        #else
+#else
             desktopBody
-        #endif
+#endif
         }
         .onChange(of: device.recoveredDeviceSerial) { serial in
             guard serial != nil else { return }
@@ -31,15 +31,15 @@ struct ProvisioningView: View {
             device.clearRecoveredDeviceResult()
         }
     }
-
-    #if os(iOS)
+    
+#if os(iOS)
     private var phoneBody: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     recoveryHero
                     recoverySteps
-
+                    
                     if let serial = device.recoveredDeviceSerial {
                         phoneSuccess(serial: serial)
                     } else {
@@ -52,7 +52,7 @@ struct ProvisioningView: View {
                             phoneRecoveryStep(account: account)
                         }
                     }
-
+                    
                     if let errorText {
                         Label(errorText, systemImage: "exclamationmark.triangle.fill")
                             .font(.callout)
@@ -61,7 +61,7 @@ struct ProvisioningView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
                     }
-
+                    
                     if provisioning.isBusy || !provisioning.status.isEmpty || !device.phase.isIdle {
                         phoneStatus
                     }
@@ -83,7 +83,7 @@ struct ProvisioningView: View {
             if email.isEmpty { email = provisioning.userEmail ?? "" }
         }
     }
-
+    
     private var recoveryHero: some View {
         VStack(alignment: .leading, spacing: 12) {
             Image(systemName: "key.horizontal.fill")
@@ -99,7 +99,7 @@ struct ProvisioningView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
-
+    
     private var recoverySteps: some View {
         HStack(spacing: 0) {
             stepMarker(number: 1, title: "Sign in", complete: isSignedIn || isRecovered)
@@ -111,16 +111,16 @@ struct ProvisioningView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Retrieval progress")
     }
-
+    
     private var isSignedIn: Bool {
         if case .loggedIn = provisioning.authStep { return true }
         return false
     }
-
+    
     private var isRecovered: Bool {
         device.recoveredDeviceSerial != nil
     }
-
+    
     private func stepMarker(number: Int, title: String, complete: Bool) -> some View {
         VStack(spacing: 7) {
             ZStack {
@@ -141,7 +141,7 @@ struct ProvisioningView: View {
                 .foregroundStyle(.secondary)
         }
     }
-
+    
     private func stepLine(complete: Bool) -> some View {
         Rectangle()
             .fill(complete ? Color.accentColor : Color.secondary.opacity(0.20))
@@ -149,7 +149,7 @@ struct ProvisioningView: View {
             .padding(.horizontal, 6)
             .offset(y: -10)
     }
-
+    
     private var phoneEmailStep: some View {
         phonePanel(title: "Sign in to Nura", icon: "envelope") {
             Text("Use the email attached to your Nuraphone.")
@@ -168,7 +168,7 @@ struct ProvisioningView: View {
             .disabled(provisioning.isBusy || email.isEmpty)
         }
     }
-
+    
     private func phoneCodeStep(sentTo: String) -> some View {
         phonePanel(title: "Check your email", icon: "number") {
             Text("Enter the login code sent to \(sentTo).")
@@ -191,7 +191,7 @@ struct ProvisioningView: View {
             .frame(maxWidth: .infinity)
         }
     }
-
+    
     private func phoneRecoveryStep(account: String) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             phonePanel(title: "Prepare your Nuraphone", icon: "headphones") {
@@ -212,7 +212,7 @@ struct ProvisioningView: View {
                 .frame(maxWidth: .infinity)
         }
     }
-
+    
     private func phoneSuccess(serial: String) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "checkmark.circle.fill")
@@ -233,7 +233,7 @@ struct ProvisioningView: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isSummaryElement)
     }
-
+    
     private var phoneStatus: some View {
         HStack(spacing: 12) {
             if provisioning.isBusy || !device.phase.isIdle {
@@ -254,13 +254,13 @@ struct ProvisioningView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
     }
-
+    
     private func preparationRow(_ title: String, icon: String) -> some View {
         Label(title, systemImage: icon)
             .font(.subheadline)
             .padding(.vertical, 2)
     }
-
+    
     private func phonePanel<Content: View>(
         title: String,
         icon: String,
@@ -275,7 +275,7 @@ struct ProvisioningView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
     }
-
+    
     private func primaryButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
@@ -288,9 +288,9 @@ struct ProvisioningView: View {
         }
         .buttonStyle(.borderedProminent)
     }
-    #endif
-
-    #if os(macOS)
+#endif
+    
+#if os(macOS)
     private var desktopBody: some View {
         NavigationStack {
             Form {
@@ -318,19 +318,19 @@ struct ProvisioningView: View {
             if email.isEmpty { email = provisioning.userEmail ?? "" }
         }
     }
-    #endif
-
+#endif
+    
     // MARK: - Sign in
-
+    
     private var emailSection: some View {
         Section("Nura account") {
             TextField("Email address", text: $email)
-                #if os(iOS)
+#if os(iOS)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.emailAddress)
-                #endif
+#endif
                 .disableAutocorrection(true)
-
+            
             Button {
                 run { try await provisioning.requestEmailCode(email) }
             } label: {
@@ -339,24 +339,24 @@ struct ProvisioningView: View {
             .disabled(provisioning.isBusy || email.isEmpty)
         }
     }
-
+    
     private func codeSection(sentTo: String) -> some View {
         Section("Enter the code") {
             Text("We sent a login code to \(sentTo).")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             TextField("Login code", text: $code)
-                #if os(iOS)
+#if os(iOS)
                 .keyboardType(.numberPad)
-                #endif
-
+#endif
+            
             Button {
                 run { try await provisioning.verifyEmailCode(code) }
             } label: {
                 Label("Verify & sign in", systemImage: "checkmark.shield")
             }
             .disabled(provisioning.isBusy || code.isEmpty)
-
+            
             Button("Use a different email") {
                 provisioning.logout()
                 code = ""
@@ -364,13 +364,13 @@ struct ProvisioningView: View {
             .foregroundStyle(.secondary)
         }
     }
-
+    
     // MARK: - Recover
-
+    
     private func recoverySection(account: String) -> some View {
         Section {
             LabeledContent("Account") { Text(account) }
-
+            
             Button {
                 errorText = nil
                 device.fetchDeviceKey()
@@ -378,7 +378,7 @@ struct ProvisioningView: View {
                 Label("Recover key from connected Nura device", systemImage: "key.horizontal")
             }
             .disabled(provisioning.isBusy || !device.phase.isIdle)
-
+            
             Button("Sign out", role: .destructive) {
                 provisioning.logout()
             }
@@ -390,9 +390,9 @@ struct ProvisioningView: View {
             }
         }
     }
-
+    
     // MARK: - Status & help
-
+    
     private var statusSection: some View {
         Section {
             HStack {
@@ -410,7 +410,7 @@ struct ProvisioningView: View {
             }
         }
     }
-
+    
     private var explanationSection: some View {
         Section {
             Text("Each nuraphone has a unique device key that is used to encrypt the session. This recovers the key from Nura's servers using your account, and persists it so you can connect without the account or offline.")
@@ -419,9 +419,9 @@ struct ProvisioningView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
-
+    
     // MARK: - Helpers
-
+    
     private func run(_ operation: @escaping () async throws -> Void) {
         errorText = nil
         Task { @MainActor in

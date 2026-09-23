@@ -24,7 +24,7 @@ struct AuthCallResult {
 enum NuraApiError: LocalizedError {
     case transport(String)
     case backend(String, Int)
-
+    
     var errorDescription: String? {
         switch self {
         case .transport(let s): return s
@@ -42,14 +42,14 @@ final class NuraApiClient {
     private let session = URLSession.shared
     static let primaryApiBase = "https://api-p3.nuraphone.com/"
     static let legacyApiBase = "https://api-p1.nuraphone.com/"
-
+    
     // MARK: - Endpoints
-
+    
     func appSession(_ state: NuraApiState, appStartTimeUnixMs: Int64) async throws -> AuthCallResult {
         let payload = Self.appContextPayload(state, appStartTimeUnixMs: appStartTimeUnixMs)
         return try await send(state, endpoint: "app/session", authenticated: false, payload: payload)
     }
-
+    
     func sendLoginEmail(_ state: NuraApiState, email: String) async throws -> AuthCallResult {
         let payload: [String: Any?] = [
             "email": email,
@@ -58,7 +58,7 @@ final class NuraApiClient {
         ]
         return try await send(state, endpoint: "auth/login_via_email", authenticated: false, payload: payload)
     }
-
+    
     func verifyCode(_ state: NuraApiState, email: String, code: String) async throws -> AuthCallResult {
         var payload: [String: Any?] = [
             "email": email,
@@ -75,7 +75,7 @@ final class NuraApiClient {
         }
         return try await send(state, endpoint: "auth/login_via_email_verify", authenticated: false, payload: payload)
     }
-
+    
     func validateToken(_ state: NuraApiState) async throws -> AuthCallResult {
         var payload: [String: Any?]? = nil
         if let asid = state.appSessionId {
@@ -83,7 +83,7 @@ final class NuraApiClient {
         }
         return try await send(state, endpoint: "auth/validate_token", authenticated: true, payload: payload)
     }
-
+    
     func sessionStart(
         _ state: NuraApiState,
         serial: Int,
@@ -105,7 +105,7 @@ final class NuraApiClient {
         }
         return result
     }
-
+    
     func automatedEntry(
         _ state: NuraApiState,
         endpoint rawEndpoint: String,
@@ -125,9 +125,9 @@ final class NuraApiClient {
         }
         return result
     }
-
+    
     // MARK: - Core request
-
+    
     private func send(
         _ state: NuraApiState,
         endpoint: String,
@@ -137,21 +137,21 @@ final class NuraApiClient {
         let base = Self.ensureTrailingSlash(state.apiBase)
         guard let baseURL = URL(string: base),
               let url = URL(string: endpoint, relativeTo: baseURL)
-        else {
+                else {
             throw NuraApiError.transport("Bad URL for \(endpoint)")
         }
-
+        
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/msgpack", forHTTPHeaderField: "Accept")
-
+        
         if authenticated {
             request.setValue(state.accessToken ?? "", forHTTPHeaderField: "access-token")
             request.setValue(state.clientKey ?? "", forHTTPHeaderField: "client")
             request.setValue(state.authUid ?? "", forHTTPHeaderField: "uid")
             request.setValue("Bearer", forHTTPHeaderField: "token-type")
         }
-
+        
         if let payload, !payload.isEmpty {
             let msgpack = MessagePackLite.serializeMap(payload)
             let boundary = "nura-\(UUID().uuidString)"
@@ -167,7 +167,7 @@ final class NuraApiClient {
             request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Content-Type")
             request.httpBody = Data()
         }
-
+        
         // Retry transient failures (network blips and 5xx) a few times with a
         // short backoff, since recovery is a multi-step exchange and a single
         // hiccup shouldn't fail the whole run.
@@ -191,18 +191,18 @@ final class NuraApiClient {
             guard let http = response as? HTTPURLResponse else {
                 throw NuraApiError.transport("No HTTP response")
             }
-
+            
             if (500...599).contains(http.statusCode), attempt < maxAttempts {
                 try? await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000)
                 continue
             }
-
+            
             var decodedBody: [String: Any?]?
             let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
             if !data.isEmpty, contentType.lowercased().contains("msgpack") {
                 decodedBody = MessagePackLite.deserialize(data) as? [String: Any?]
             }
-
+            
             return AuthCallResult(
                 statusCode: http.statusCode,
                 isSuccess: (200..<300).contains(http.statusCode),
@@ -215,55 +215,54 @@ final class NuraApiClient {
         }
         throw lastError ?? NuraApiError.transport("Request failed")
     }
-
+    
     private static func isRetryable(_ error: URLError) -> Bool {
         switch error.code {
         case .timedOut, .networkConnectionLost, .cannotConnectToHost,
-             .dnsLookupFailed, .resourceUnavailable:
+                .dnsLookupFailed, .resourceUnavailable:
             return true
         default:
             return false
         }
     }
-
+    
     // MARK: - Helpers
-
-    /// Turns low-level networking errors into a message that points at the most
-    /// likely cause — Nura's backend being offline, since it's defunct hardware.
+    
+    /// Turn low-level networking errors into a message
     private static func friendlyMessage(for error: URLError) -> String {
         switch error.code {
         case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
-             .timedOut, .networkConnectionLost, .resourceUnavailable:
+                .timedOut, .networkConnectionLost, .resourceUnavailable:
             return "Couldn't reach Nura's servers. They may be offline, or check your internet connection."
         case .notConnectedToInternet:
             return "No internet connection."
         case .secureConnectionFailed, .serverCertificateUntrusted,
-             .serverCertificateHasBadDate, .serverCertificateNotYetValid:
+                .serverCertificateHasBadDate, .serverCertificateNotYetValid:
             return "Secure connection to Nura's servers failed."
         default:
             return "Network error: \(error.localizedDescription)"
         }
     }
-
+    
     private static func ensureTrailingSlash(_ base: String) -> String {
         base.hasSuffix("/") ? base : base + "/"
     }
-
+    
     private static func alternateApiBase(_ apiBase: String) -> String? {
         if apiBase.localizedCaseInsensitiveContains("api-p1") { return primaryApiBase }
         if apiBase.localizedCaseInsensitiveContains("api-p3") { return legacyApiBase }
         return nil
     }
-
+    
     private static func normalizeAutomatedEndpoint(_ endpoint: String) -> String {
         let trimmed = endpoint.trimmingCharacters(in: .whitespaces)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         if trimmed.lowercased().hasPrefix("end_to_end/") { return trimmed }
         return "end_to_end/\(trimmed)"
     }
-
+    
     /// The Android app-context payload the backend expects for app/session and
-    /// token validation. Copied verbatim from NuraLib.
+    /// token validation. Copied from NuraLib with permission.
     static func appContextPayload(_ state: NuraApiState, appStartTimeUnixMs: Int64) -> [String: Any?] {
         [
             "uuid": state.uuid,

@@ -60,6 +60,9 @@ let cmdSetKickitEnabled: UInt16 = 0x00B5
 let cmdSetButtonConfigV1: UInt16 = 0x00B6
 let cmdGetButtonConfigV1: UInt16 = 0x00B7
 let cmdGetVisualisationData: UInt16 = 0x00B8
+/// Puts the headset into Bluetooth pairing (discoverable) mode for 120 s.
+/// Payload: BE16(0x00BE) ∥ BE16(120) — reversed-engineered from Android libapp.so.
+let cmdEnterDiscoverable: UInt16 = 0x00BE
 
 // MARK: - NuraTrue Pro / Denon PerL Pro inner opcodes
 //

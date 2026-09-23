@@ -13,9 +13,9 @@ enum HotKeyAction: String, CaseIterable, Identifiable, Codable {
     case toggleAncSocial
     case nextProfile
     case previousProfile
-
+    
     var id: String { rawValue }
-
+    
     var title: String {
         switch self {
         case .immersionUp: return "Immersion up"
@@ -25,7 +25,7 @@ enum HotKeyAction: String, CaseIterable, Identifiable, Codable {
         case .previousProfile: return "Previous profile"
         }
     }
-
+    
     var defaultCombo: KeyCombo {
         // Control+Option + a distinctive key, chosen to avoid common conflicts.
         let mods = UInt32(controlKey) | UInt32(optionKey)
@@ -46,7 +46,7 @@ enum HotKeyAction: String, CaseIterable, Identifiable, Codable {
 struct KeyCombo: Codable, Equatable {
     var keyCode: UInt32
     var modifiers: UInt32
-
+    
     var displayString: String {
         var s = ""
         if modifiers & UInt32(controlKey) != 0 { s += "⌃" }
@@ -56,7 +56,7 @@ struct KeyCombo: Codable, Equatable {
         s += KeyCombo.keyName(for: keyCode)
         return s
     }
-
+    
     /// Builds a combo from an NSEvent key-down, or nil if it has no usable
     /// modifiers (we require at least one so global hotkeys don't hijack plain
     /// keys).
@@ -70,7 +70,7 @@ struct KeyCombo: Codable, Equatable {
         guard mods != 0 else { return nil }
         return KeyCombo(keyCode: UInt32(event.keyCode), modifiers: mods)
     }
-
+    
     static func keyName(for keyCode: UInt32) -> String {
         switch Int(keyCode) {
         case kVK_UpArrow: return "↑"
@@ -131,14 +131,14 @@ final class HotKeySettings: ObservableObject {
     @Published var combos: [HotKeyAction: KeyCombo] {
         didSet { save() }
     }
-
+    
     private static let enabledKey = "hotkeys.enabled"
     private static let combosKey = "hotkeys.combos"
-
+    
     init() {
         let defaults = UserDefaults.standard
         self.enabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
-
+        
         var loaded: [HotKeyAction: KeyCombo] = [:]
         if let data = defaults.data(forKey: Self.combosKey),
            let decoded = try? JSONDecoder().decode([String: KeyCombo].self, from: data) {
@@ -152,17 +152,17 @@ final class HotKeySettings: ObservableObject {
         }
         self.combos = loaded
     }
-
+    
     func combo(for action: HotKeyAction) -> KeyCombo {
         combos[action] ?? action.defaultCombo
     }
-
+    
     func resetToDefaults() {
         var d: [HotKeyAction: KeyCombo] = [:]
         for action in HotKeyAction.allCases { d[action] = action.defaultCombo }
         combos = d
     }
-
+    
     private func save() {
         let defaults = UserDefaults.standard
         defaults.set(enabled, forKey: Self.enabledKey)
@@ -182,14 +182,14 @@ final class HotKeySettings: ObservableObject {
 final class HotKeyCenter {
     static let shared = HotKeyCenter()
     private init() {}
-
+    
     private var handlers: [HotKeyAction: @MainActor () -> Void] = [:]
     private var idToAction: [UInt32: HotKeyAction] = [:]
     private var refs: [EventHotKeyRef] = []
     private var eventHandler: EventHandlerRef?
     private var nextID: UInt32 = 1
     private let signature: OSType = 0x4E555241 // "NURA"
-
+    
     /// Installs the one-shot Carbon event handler and the action closures. The
     /// handler is a non-capturing literal closure (the only form, besides a
     /// plain func reference, that Swift can turn into a C function pointer).
@@ -220,7 +220,7 @@ final class HotKeyCenter {
             1, &spec, nil, &eventHandler
         )
     }
-
+    
     /// Re-registers all hotkeys to match the given settings.
     func apply(_ settings: HotKeySettings) {
         unregisterAll()
@@ -229,7 +229,7 @@ final class HotKeyCenter {
             register(action: action, combo: settings.combo(for: action))
         }
     }
-
+    
     private func register(action: HotKeyAction, combo: KeyCombo) {
         let id = nextID
         nextID += 1
@@ -240,13 +240,13 @@ final class HotKeyCenter {
                                          GetApplicationEventTarget(), 0, &ref)
         if status == noErr, let ref { refs.append(ref) }
     }
-
+    
     private func unregisterAll() {
         for ref in refs { UnregisterEventHotKey(ref) }
         refs.removeAll()
         idToAction.removeAll()
     }
-
+    
     /// Called from the Carbon callback (already hopped to the main actor).
     func handle(id: UInt32) {
         guard let action = idToAction[id], let handler = handlers[action] else { return }

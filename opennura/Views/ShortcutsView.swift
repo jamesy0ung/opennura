@@ -6,12 +6,12 @@ import Carbon.HIToolbox
 /// a key combo per action.
 struct ShortcutsView: View {
     @ObservedObject var hotkeys: HotKeySettings
-
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
                 header
-
+                
                 Card(accent: .indigo) {
                     Toggle(isOn: $hotkeys.enabled) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -21,7 +21,7 @@ struct ShortcutsView: View {
                         }
                     }
                 }
-
+                
                 Card("Shortcuts", systemImage: "command", accent: .teal) {
                     VStack(spacing: 4) {
                         ForEach(HotKeyAction.allCases) { action in
@@ -32,7 +32,7 @@ struct ShortcutsView: View {
                     .disabled(!hotkeys.enabled)
                     .opacity(hotkeys.enabled ? 1 : 0.5)
                 }
-
+                
                 Button("Reset to defaults") { hotkeys.resetToDefaults() }
                     .buttonStyle(.borderless)
                     .font(.footnote)
@@ -44,17 +44,17 @@ struct ShortcutsView: View {
         .background(
             LinearGradient(colors: [Color.accentColor.opacity(0.10), Color.clear],
                            startPoint: .top, endPoint: .center)
-                .ignoresSafeArea()
+            .ignoresSafeArea()
         )
     }
-
+    
     private var header: some View {
         HStack {
             Text("Shortcuts").font(.largeTitle.weight(.bold))
             Spacer()
         }
     }
-
+    
     private func rowFor(_ action: HotKeyAction) -> some View {
         HStack {
             Text(action.title)
@@ -72,10 +72,10 @@ struct ShortcutsView: View {
 private struct KeyRecorderButton: View {
     let combo: KeyCombo
     let onRecorded: (KeyCombo) -> Void
-
+    
     @State private var recording = false
     @State private var monitor: Any?
-
+    
     var body: some View {
         Button {
             if recording { stop() } else { start() }
@@ -93,7 +93,7 @@ private struct KeyRecorderButton: View {
         .buttonStyle(.plain)
         .onDisappear { stop() }
     }
-
+    
     private func start() {
         recording = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -109,7 +109,7 @@ private struct KeyRecorderButton: View {
             return event
         }
     }
-
+    
     private func stop() {
         recording = false
         if let monitor { NSEvent.removeMonitor(monitor) }
