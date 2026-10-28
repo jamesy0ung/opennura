@@ -1,9 +1,8 @@
 import Foundation
 
-/// Persists app configuration. Non-secret metadata (serials, names, firmware,
-/// uuid) lives in a JSON file; secrets (each device's key and the Nura account
-/// tokens) live in the Keychain. Legacy config.json files that still contain
-/// secrets are migrated into the Keychain on load and then stripped from disk.
+/// Persists app configuration to a JSON file. All fields, including secrets
+/// (device keys and auth tokens), are stored on disk. Legacy installs that
+/// stored secrets only in the Keychain have them overlaid on load.
 final class NuraConfigStore {
     private let fileURL: URL
     
@@ -42,18 +41,15 @@ final class NuraConfigStore {
         
         overlaySecrets(into: &config)
         
-        // If the file held secrets, migrate them into the Keychain and rewrite
-        // the file without them. save() only strips a secret from disk once it
-        // has been verified in the Keychain, so a Keychain failure never loses
-        // the key.
+        // Legacy file had Keychain-only secrets; rewrite to include them on disk.
         if fileHadAuthSecret || fileHadDeviceKey {
             save(config)
         }
         return config
     }
     
-    /// Fills in secret fields from the Keychain where present, leaving any
-    /// value already in `config` (i.e. from a legacy file) untouched otherwise.
+    /// Fills in secret fields from the Keychain for legacy installs that stored
+    /// secrets there; leaves any value already in `config` untouched.
     private func overlaySecrets(into config: inout NuraConfig) {
         if let authJSON = NuraKeychain.get(NuraKeychain.authAccount),
            let authData = authJSON.data(using: .utf8),
@@ -69,32 +65,7 @@ final class NuraConfigStore {
     }
     
     func save(_ config: NuraConfig) {
-        var onDisk = config
-        
-        // Move the auth tokens into the Keychain; only drop them from the file
-        // once the Keychain write is verified.
-        if let auth = config.auth,
-           let authData = try? JSONEncoder().encode(auth),
-           let authJSON = String(data: authData, encoding: .utf8) {
-            if NuraKeychain.set(authJSON, account: NuraKeychain.authAccount),
-               NuraKeychain.get(NuraKeychain.authAccount) != nil {
-                onDisk.auth = nil
-            }
-        }
-        
-        // Same for each device key.
-        onDisk.devices = config.devices.map { entry in
-            var stripped = entry
-            if !entry.deviceKey.isEmpty {
-                let account = NuraKeychain.deviceKeyAccount(serial: entry.deviceSerial)
-                if NuraKeychain.set(entry.deviceKey, account: account),
-                   NuraKeychain.get(account) != nil {
-                    stripped.deviceKey = ""
-                }
-            }
-            return stripped
-        }
-        
+        let onDisk = config
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {
